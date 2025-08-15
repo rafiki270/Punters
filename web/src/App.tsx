@@ -923,16 +923,17 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
   const [rotation, setRotation] = useState<number>(settings?.rotationSec ?? 90)
   const [defaultSizeId, setDefaultSizeId] = useState<number | ''>(settings?.defaultSizeId ?? '')
   const [modeSel, setModeSel] = useState<'server'|'client'>(settings?.mode as any || 'server')
+  const [instanceName, setInstanceName] = useState<string>('')
   const [selServer, setSelServer] = useState<string>(remoteBase || '')
   const [manualServer, setManualServer] = useState<string>(remoteBase || '')
   const [saving, setSaving] = useState(false)
-  useEffect(() => { if (settings) { setRotation(settings.rotationSec); setDefaultSizeId(settings.defaultSizeId ?? ''); setModeSel((settings as any).mode || 'server') } }, [settings])
+  useEffect(() => { if (settings) { setRotation(settings.rotationSec); setDefaultSizeId(settings.defaultSizeId ?? ''); const m=((settings as any).mode||'server') as 'server'|'client'; setModeSel(m); const defName = (m==='server'?'punters-server':'punters-client'); setInstanceName(((settings as any).instanceName as string) || defName) } }, [settings])
   const save = async () => {
     if (saving) return
     setSaving(true)
     const minDelay = new Promise<void>(res=>setTimeout(res,1000))
     await Promise.all([
-      fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ rotationSec: Number(rotation), defaultSizeId: defaultSizeId || null, themeMode: 'dark', defaultDisplayMode: 'all', currency: settings?.currency || 'GBP', locale: settings?.locale || 'en-GB', mode: modeSel }) }),
+      fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ rotationSec: Number(rotation), defaultSizeId: defaultSizeId || null, themeMode: 'dark', defaultDisplayMode: 'all', currency: settings?.currency || 'GBP', locale: settings?.locale || 'en-GB', mode: modeSel, instanceName }) }),
       minDelay
     ])
     if (modeSel==='client') {
@@ -945,6 +946,13 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
   }
   return (
     <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm mb-1">Device Name</label>
+          <input value={instanceName} onChange={e=>setInstanceName(e.target.value)} placeholder={modeSel==='server'?'punters-server':'punters-client'} className="w-72 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+          <div className="text-xs opacity-70 mt-1">Advertised via Bonjour. Connect with http://{instanceName}.local:{modeSel==='server'?3000:3000}</div>
+        </div>
+      </div>
       <div>
         <label className="block text-sm mb-1">Rotation (seconds)</label>
         <input type="number" min={5} max={3600} value={rotation} onChange={e=>setRotation(Number(e.target.value))} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />

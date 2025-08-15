@@ -9,6 +9,7 @@ datasource db {
 
 model GlobalSettings {
   id                 Int      @id
+  instanceName       String   @default("punters-server")
   themeMode          String   @default("light") // 'light' | 'dark'
   rotationSec        Int      @default(90)
   defaultDisplayMode String   @default("all")   // 'all' | 'beer' | 'ads'

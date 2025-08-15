@@ -9,18 +9,24 @@ let list: DiscoveredServer[] = []
 let currentMode: 'server'|'client' = 'server'
 let bonjourInst: any = null
 let currentPort = 0
+let currentName: string | undefined
 
 export function getMode() { return currentMode }
 export function getDiscovered(): DiscoveredServer[] { return list }
 
-export function startDiscovery(port: number, mode: 'server'|'client') {
+export function startDiscovery(port: number, mode: 'server'|'client', preferredName?: string) {
   currentPort = port
   if (!bonjourInst) bonjourInst = new (Bonjour as any)()
-  setMode(mode)
+  setConfig({ mode, name: preferredName })
 }
 
-export function setMode(mode: 'server'|'client') {
-  currentMode = mode
+export function setMode(mode: 'server'|'client') { setConfig({ mode }) }
+
+export async function setName(name?: string) { await setConfig({ name }) }
+
+export async function setConfig({ mode, name }: { mode?: 'server'|'client'; name?: string }) {
+  if (mode) currentMode = mode
+  if (name !== undefined) currentName = name
   // stop existing
   try { advertiser && advertiser.stop() } catch {}
   try { browserInst && browserInst.destroy() } catch {}
@@ -29,7 +35,9 @@ export function setMode(mode: 'server'|'client') {
   list = []
   if (!bonjourInst) bonjourInst = new (Bonjour as any)()
   if (currentMode === 'server') {
-    advertiser = bonjourInst.publish({ name: process.env.DISCOVERY_NAME || 'Punters Main', type: SERVICE_TYPE, port: currentPort })
+    const base = currentName || process.env.DISCOVERY_NAME || (currentMode === 'server' ? 'punters-server' : 'punters-client')
+    const unique = await suggestUniqueName(base)
+    advertiser = bonjourInst.publish({ name: unique, type: SERVICE_TYPE, port: currentPort })
     advertiser.start()
   } else {
     browserInst = bonjourInst.find({ type: SERVICE_TYPE })
@@ -48,4 +56,23 @@ function updateList(svc: any) {
 
 function removeFromList(svc: any) {
   list = list.filter((x) => !(x.name === svc.name && x.port === svc.port && x.host === (svc.host || x.host)))
+}
+
+// Compute an available name by scanning current services
+export async function suggestUniqueName(base: string): Promise<string> {
+  if (!bonjourInst) bonjourInst = new (Bonjour as any)()
+  const seen = new Set<string>()
+  // Collect existing names for a short window
+  await new Promise<void>((resolve) => {
+    const browser = bonjourInst.find({ type: SERVICE_TYPE })
+    const timer = setTimeout(() => { try { browser.stop() } catch {}; resolve() }, 800)
+    browser.on('up', (svc: any) => { if (svc?.name) seen.add(String(svc.name)) })
+    browser.on('down', () => {})
+  })
+  let candidate = base
+  let i = 2
+  while (seen.has(candidate)) {
+    candidate = `${base}-${i++}`
+  }
+  return candidate
 }

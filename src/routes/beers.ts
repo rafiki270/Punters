@@ -36,9 +36,9 @@ export async function registerBeerRoutes(app: FastifyInstance) {
     return prisma.beer.findMany({
       where: {
         OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { brewery: { contains: q, mode: 'insensitive' } },
-          { style: { contains: q, mode: 'insensitive' } }
+          { name: { contains: q } },
+          { brewery: { contains: q } },
+          { style: { contains: q } }
         ]
       },
       take: 20,
@@ -63,8 +63,8 @@ export async function registerBeerRoutes(app: FastifyInstance) {
       const currency = settings?.currency || 'GBP'
       const defaults = await prisma.defaultPrice.findMany({ where: { isGuest: beer.isGuest } })
       if (defaults.length) {
-        const entries = defaults.map((d) => ({ beerId: beer.id, serveSizeId: d.serveSizeId, amountMinor: d.amountMinor, currency }))
-        await prisma.price.createMany({ data: entries, skipDuplicates: true })
+        const entries = defaults.map((d: any) => ({ beerId: beer.id, serveSizeId: d.serveSizeId, amountMinor: d.amountMinor, currency }))
+        await prisma.price.createMany({ data: entries })
       }
     }
 
@@ -110,7 +110,7 @@ export async function registerBeerRoutes(app: FastifyInstance) {
     const { prices } = PriceUpsert.parse((req as any).body)
     // Upsert all provided sizes
     await Promise.all(
-      prices.map((p) =>
+      prices.map((p: any) =>
         prisma.price.upsert({
           where: { beerId_serveSizeId: { beerId: id, serveSizeId: p.serveSizeId } },
           update: { amountMinor: p.amountMinor, currency: p.currency },

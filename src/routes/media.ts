@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify'
-import { ImageInfo } from 'image-size'
-import { imageSize } from 'image-size'
+// image-size typing can vary; use default import and loose typing
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import sizeOf from 'image-size'
 import { prisma } from '../db'
 import { requireAdmin } from '../auth'
 import { emitChange } from '../events'
@@ -63,8 +65,8 @@ export async function registerMediaRoutes(app: FastifyInstance) {
       return reply.code(413).send({ error: 'File too large (truncated)' })
     }
     const buf = Buffer.concat(chunks)
-    let dims: ImageInfo | undefined
-    try { dims = imageSize(buf) } catch {}
+    let dims: any
+    try { dims = sizeOf(buf) } catch {}
 
     const tag = (mp.fields?.tag?.value as string | undefined) || ''
     const asset = await prisma.asset.create({

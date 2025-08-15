@@ -15,7 +15,7 @@ import { registerAuthRoutes } from './auth';
 import { registerAdminRoutes } from './routes/admin';
 import { registerDisplayRoutes } from './routes/display';
 import { onChange } from './events';
-import { startDiscovery, getDiscovered } from './discovery';
+import { startDiscovery, getDiscovered, suggestUniqueName } from './discovery';
 import { prisma } from './db';
 import cookie from '@fastify/cookie';
 import fs from 'node:fs';
@@ -44,6 +44,12 @@ async function buildServer() {
     return { mode: (s?.mode as any) || 'server' }
   })
   app.get('/api/discovery/servers', async () => getDiscovered())
+  app.get('/api/discovery/unique-name', async (req) => {
+    const q = (req as any).query || {}
+    const base = String(q.base || '').trim() || 'punters-server'
+    const name = await suggestUniqueName(base)
+    return { name }
+  })
   await registerSettingsRoutes(app);
   await registerSizeRoutes(app);
   await registerBeerRoutes(app);
@@ -57,9 +63,10 @@ async function buildServer() {
   try {
     const s = await prisma.globalSettings.findUnique({ where: { id: 1 } })
     const mode = (s?.mode as any) || 'server'
-    startDiscovery(PORT, mode)
+    const preferredName = (s as any)?.instanceName || (mode === 'server' ? 'punters-server' : 'punters-client')
+    startDiscovery(PORT, mode, preferredName)
   } catch {
-    startDiscovery(PORT, 'server')
+    startDiscovery(PORT, 'server', 'punters-server')
   }
   await registerDisplayRoutes(app);
 

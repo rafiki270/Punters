@@ -151,3 +151,21 @@ TBD.
 
 ---
 For scope and architecture, read REQUIREMENTS.md.
+## Raspberry Pi one-line install (multi-arch Docker)
+
+We publish a multi-arch image (amd64, arm64, arm/v7) to GHCR on tagged releases. You can deploy to a Pi (or any Debian-based host) with one command:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/deploy/install.sh)" -- --port 80 --data-dir /opt/punters/data --image ghcr.io/rafiki270/punters:latest
+```
+
+Flags:
+- `--port`: host port to expose (default 80)
+- `--data-dir`: persistent data dir (default `/opt/punters/data`)
+- `--watchtower`: include auto-updater service (optional)
+- `--image`: container image (default placeholder; set to your GHCR image)
+
+The script will:
+- Install Docker + Compose plugin if missing
+- Write `/opt/punters/docker-compose.yml`
+- Pull your image and start it with `docker compose up -d`

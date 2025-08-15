@@ -81,13 +81,13 @@ export async function registerTapRoutes(app: FastifyInstance) {
     const count = Math.max(0, Math.floor(Number(body.count || 0)))
     // Ensure 1..count exist
     const existing = await prisma.tap.findMany()
-    const existingNums = new Set(existing.map((t) => t.number))
+    const existingNums = new Set(existing.map((t: any) => t.number))
     const toCreate: number[] = []
     for (let i = 1; i <= count; i++) if (!existingNums.has(i)) toCreate.push(i)
     if (toCreate.length) await prisma.tap.createMany({ data: toCreate.map((n) => ({ number: n })) })
     // Remove any above count
-    const toRemove = existing.filter((t) => t.number > count)
-    for (const t of toRemove) {
+    const toRemove = existing.filter((t: any) => t.number > count)
+    for (const t of toRemove as any[]) {
       await prisma.tap.delete({ where: { number: t.number } })
     }
     const taps = await prisma.tap.findMany({ orderBy: { number: 'asc' } })
@@ -125,8 +125,8 @@ export async function registerTapRoutes(app: FastifyInstance) {
       const currency = settings?.currency || 'GBP'
       const defaults = await prisma.defaultPrice.findMany({ where: { isGuest: !!beer?.isGuest } })
       if (defaults.length) {
-        const entries = defaults.map((d) => ({ beerId, serveSizeId: d.serveSizeId, amountMinor: d.amountMinor, currency }))
-        await prisma.price.createMany({ data: entries, skipDuplicates: true })
+        const entries = defaults.map((d: any) => ({ beerId, serveSizeId: d.serveSizeId, amountMinor: d.amountMinor, currency }))
+        await prisma.price.createMany({ data: entries })
       }
     }
 

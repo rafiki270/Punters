@@ -3,6 +3,7 @@ import { prisma } from '../db'
 import { z } from 'zod'
 import { requireAdmin } from '../auth'
 import { emitChange } from '../events'
+import { setConfig } from '../discovery'
 
 // Accept partial updates and coerce numeric inputs from strings
 const SettingsSchema = z.object({
@@ -89,9 +90,10 @@ export async function registerSettingsRoutes(app: FastifyInstance) {
         create: { serveSizeId: Number(sid), isGuest: true, amountMinor: Number(amt) }
       })))
     }
-    if (parsed.mode) {
-      const { setMode } = await import('../discovery')
-      setMode(parsed.mode)
+    const desiredMode = (parsed as any).mode
+    const desiredName = (parsed as any).instanceName ?? (req as any).body?.instanceName
+    if (desiredMode || desiredName) {
+      await setConfig({ mode: desiredMode, name: desiredName })
     }
     emitChange('settings')
     return reply.send(updated)

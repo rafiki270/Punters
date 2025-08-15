@@ -47,18 +47,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     }
     const allSizes = await prisma.serveSize.findMany()
     const defaultSize = allSizes.find((s) => s.name === 'Pint') ?? allSizes[0]
-    const defaultPrices: Record<number, number> = {}
-    const defaultGuestPrices: Record<number, number> = {}
-    for (const s of allSizes) {
-      if (s.name === 'Pint') {
-        defaultGuestPrices[s.id] = 600
-      } else if (s.name === 'Half Pint') {
-        defaultGuestPrices[s.id] = 300
-      } else {
-        defaultGuestPrices[s.id] = 0
-      }
-      defaultPrices[s.id] = 0
-    }
+    // Create base settings
     await prisma.globalSettings.create({
       data: {
         id: 1,
@@ -67,12 +56,29 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         defaultDisplayMode: 'all',
         currency: 'GBP',
         defaultSizeId: defaultSize?.id,
-        defaultPrices,
-        defaultGuestPrices,
         locale: 'en-GB',
         authEnabled: false
       }
     })
+
+    // Seed default and guest default prices
+    const createDefaults: Array<{ serveSizeId: number; amountMinor: number; isGuest: boolean }> = []
+    for (const s of allSizes) {
+      // Standard defaults (0)
+      createDefaults.push({ serveSizeId: s.id, amountMinor: 0, isGuest: false })
+      // Guest defaults (e.g., Pint 600, Half 300, others 0)
+      let guest = 0
+      if (s.name === 'Pint') guest = 600
+      else if (s.name === 'Half Pint') guest = 300
+      createDefaults.push({ serveSizeId: s.id, amountMinor: guest, isGuest: true })
+    }
+    for (const d of createDefaults) {
+      await prisma.defaultPrice.upsert({
+        where: { serveSizeId_isGuest: { serveSizeId: d.serveSizeId, isGuest: d.isGuest } },
+        update: { amountMinor: d.amountMinor },
+        create: { serveSizeId: d.serveSizeId, isGuest: d.isGuest, amountMinor: d.amountMinor }
+      })
+    }
 
     return { ok: true }
   })
