@@ -26,7 +26,11 @@ async function buildServer() {
   const app = Fastify({ logger: true });
 
   await app.register(fastifyCors, { origin: true });
-  await app.register(fastifyMultipart);
+  await app.register(fastifyMultipart, {
+    limits: {
+      fileSize: 50 * 1024 * 1024 // 50 MB
+    }
+  });
   await app.register(cookie);
 
   // Basic health

@@ -17,6 +17,6 @@ export async function registerDisplayRoutes(app: FastifyInstance) {
       },
       orderBy: { createdAt: 'desc' }
     })
-    return assets.map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mimeType, width: a.width, height: a.height, allowPair: a.allowPair, fullscreen: a.fullscreen }))
+    return assets.map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mimeType, width: a.width, height: a.height, allowPair: a.allowPair, fullscreen: a.fullscreen, requireLogo: a.requireLogo, displayOrder: a.displayOrder }))
   })
 }

@@ -16,22 +16,35 @@ export async function registerMediaRoutes(app: FastifyInstance) {
           { tags: { notIn: ['style:logo', 'style:background'] } },
         ]
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: [
+        { displayOrder: 'asc' },
+        { createdAt: 'desc' }
+      ]
     })
   })
 
   app.put('/api/assets/:id', { preHandler: requireAdmin }, async (req, reply) => {
     const id = Number((req.params as any).id)
-    const body = (req as any).body as { allowPair?: boolean; fullscreen?: boolean }
+    const body = (req as any).body as { allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; displayOrder?: number }
     try {
       const updated = await prisma.asset.update({ where: { id }, data: {
         allowPair: body.allowPair ?? undefined,
         fullscreen: body.fullscreen ?? undefined,
+        requireLogo: body.requireLogo ?? undefined,
+        displayOrder: typeof body.displayOrder === 'number' ? Number(body.displayOrder) : undefined,
       } })
       return updated
     } catch {
       return reply.code(404).send({ error: 'Not found' })
     }
+  })
+
+  app.put('/api/assets/order', { preHandler: requireAdmin }, async (req) => {
+    const ids = ((req as any).body?.ids as number[]) || []
+    for (let i = 0; i < ids.length; i++) {
+      await prisma.asset.update({ where: { id: Number(ids[i]) }, data: { displayOrder: i } })
+    }
+    return { ok: true }
   })
 
   app.post('/api/upload', { preHandler: requireAdmin }, async (req, reply) => {
@@ -41,12 +54,11 @@ export async function registerMediaRoutes(app: FastifyInstance) {
     if (!['image/jpeg', 'image/png'].includes(mime)) {
       return reply.code(400).send({ error: 'Only JPG/PNG allowed' })
     }
-    const maxBytes = 10 * 1024 * 1024
-    if (Number(mp.fields?.file?.value?.byteLength || mp.file?.bytesRead) > maxBytes) {
-      return reply.code(400).send({ error: 'File too large' })
-    }
     const chunks: Buffer[] = []
     for await (const chunk of mp.file) chunks.push(chunk as Buffer)
+    if ((mp.file as any)?.truncated) {
+      return reply.code(413).send({ error: 'File too large (truncated)' })
+    }
     const buf = Buffer.concat(chunks)
     let dims: ImageInfo | undefined
     try { dims = imageSize(buf) } catch {}
@@ -57,8 +69,8 @@ export async function registerMediaRoutes(app: FastifyInstance) {
         type: 'image',
         filename: mp.filename || 'upload',
         mimeType: mime,
-        width: typeof dims?.width === 'number' ? dims!.width : null as any,
-        height: typeof dims?.height === 'number' ? dims!.height : null as any,
+        width: typeof dims?.width === 'number' ? (dims!.width as number) : null as any,
+        height: typeof dims?.height === 'number' ? (dims!.height as number) : null as any,
         sizeBytes: buf.length,
         data: buf,
         tags: tag

@@ -145,6 +145,8 @@ model Asset {
   sizeBytes Int
   data      Bytes?
   tags      String?
+  requireLogo Boolean @default(false)
+  displayOrder Int   @default(0)
   allowPair Boolean  @default(true)
   fullscreen Boolean @default(false)
   createdAt DateTime @default(now())

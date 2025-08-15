@@ -4,7 +4,7 @@ type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: stri
 type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number; volumeMl?: number } }
 type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[]; colorHex?: string|null }
 type TapBeer = { tapNumber: number; status: string; beer: Beer|null }
-type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean }
+type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; displayOrder?: number }
 type Size = { id: number; name: string; volumeMl: number; displayOrder: number }
 type Discovered = { name: string; host: string; port: number; addresses: string[] }
 type Device = { id:number; name:string; displayMode:'inherit'|'all'|'beer'|'ads'; beerColumns:number; itemsPerColumn:number; cellScale?:number|null; columnGap?:number|null; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right' | null; logoScale?: number|null; bgPosition?: 'center'|'top'|'bottom'|'left'|'right' | null; bgScale?: number|null }
@@ -182,19 +182,21 @@ function Display() {
     type Slide = { type: 'beer'|'ad'|'adpair'; data: any }
     const s: Slide[] = []
     beerPages.forEach(pg => s.push({ type: 'beer', data: pg }))
-    // Build ad slides with pairing
-    const fullscreenAds = ads.filter(a => a.fullscreen)
-    const others = ads.filter(a => !a.fullscreen)
-    const pairablePortraits = others.filter(a => (a.allowPair !== false) && (Number(a.height||0) > Number(a.width||0)))
-    const nonPairables = others.filter(a => !((a.allowPair !== false) && (Number(a.height||0) > Number(a.width||0))))
-    for (let i = 0; i + 1 < pairablePortraits.length; i += 2) {
-      s.push({ type: 'adpair', data: [pairablePortraits[i], pairablePortraits[i+1]] })
+    // Sort ads by displayOrder then created order
+    const adsSorted = ads.slice().sort((a,b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+    for (let i = 0; i < adsSorted.length; i++) {
+      const a = adsSorted[i]
+      if (a.fullscreen) { s.push({ type: 'ad', data: a }); continue }
+      const next = adsSorted[i+1]
+      const canPair = (x: Ad) => (x.allowPair !== false) && !x.fullscreen
+      const isPortrait = (x: Ad) => Number(x.height||0) > Number(x.width||0)
+      if (next && canPair(a) && canPair(next) && (isPortrait(a) && isPortrait(next))) {
+        s.push({ type: 'adpair', data: [a, next] })
+        i++
+        continue
+      }
+      s.push({ type: 'ad', data: a })
     }
-    if (pairablePortraits.length % 2 === 1) {
-      s.push({ type: 'ad', data: pairablePortraits[pairablePortraits.length - 1] })
-    }
-    nonPairables.forEach(ad => s.push({ type: 'ad', data: ad }))
-    fullscreenAds.forEach(ad => s.push({ type: 'ad', data: ad }))
     // Determine effective mode
     let modeEff: 'all'|'beer'|'ads' = 'all'
     if (device && device.displayMode !== 'inherit') modeEff = device.displayMode
@@ -206,6 +208,7 @@ function Display() {
   const cur = slides[pageIdx % slides.length]
   const curIsAd = cur.type === 'ad' || cur.type === 'adpair'
   const curIsFullscreen = cur.type === 'ad' && (cur.data as Ad)?.fullscreen
+  const footPadPx = ((settings?.showFooter !== false) && !curIsFullscreen) ? 96 : 24
 
   const contentBase = (mode==='client' && remoteBase) ? remoteBase : ''
   const bgUrl = settings?.backgroundAssetId ? `${contentBase}/api/assets/${settings.backgroundAssetId}/content` : null
@@ -255,6 +258,18 @@ function Display() {
       )}
       {/* Floating controls (auto-hide) */}
       <div className={`fixed top-3 right-3 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto flex items-center gap-2`}>
+        <button onClick={()=>setPaused(p=>!p)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
+          {paused ? (
+            // Play icon
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M8 5v14l11-7z"/></svg>
+          ) : (
+            // Pause icon
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+          )}
+        </button>
+        <button onClick={()=>{ setPageIdx(p=>p+1); setSecs(settings?.rotationSec ?? 90) }} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" aria-label="Next Page">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M7 6h2v12H7zM11 6l8 6-8 6z"/></svg>
+        </button>
         <button onClick={toggleFullscreen} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
           {isFullscreen ? (
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -278,7 +293,7 @@ function Display() {
             <div className="flex flex-col items-center">
               <img src={(settings?.themeMode||'dark')==='dark' ? '/logo_white.png' : '/logo_black.png'} alt="logo" className="h-24 w-auto" />
               <div className="space-y-6 mt-6">
-                <div className="text-sm opacity-80">Punters is an application brought to you by</div>
+                <div className="text-sm opacity-80"><span className="font-bold">Punters</span> is an application brought to you for <span className="font-bold">FREE</span> by</div>
                 <div className="text-2xl md:text-4xl font-extrabold">Not That California Brewing Co.</div>
                 <div className="text-xs md:text-sm opacity-80">California, Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿</div>
                 <div className="text-xs md:text-sm break-words">
@@ -361,8 +376,32 @@ function Display() {
                       <span className="opacity-70">{row.tapNumber} -</span>
                       <span className="truncate">{row.beer.name}</span>
                       {row.beer.colorHex && row.beer.colorHex !== '#00000000' && (
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" style={{ color: row.beer.colorHex }} fill="currentColor">
-                          <path d="M9 3h6l-1 17a3 3 0 0 1-3 3h-1a3 3 0 0 1-3-3L6 3h3zm7 0h2v2h-2z"/>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 512 512">
+                          <title>Simple Pint Glass Icon</title>
+                          {/* Glass outline */}
+                          <path d="M128 64 h256 l-32 384 H160 L128 64 z"
+                                fill="none" stroke="#000" stroke-width="16" stroke-linejoin="round"/>
+
+                          {/* Beer fill (change this colour programmatically) */}
+                          <path id="beer-fill" d="M144 80 h224 l-28 352 H172 L144 80 z"
+                                fill={row.beer.colorHex} stroke="none"/>
+
+                          {/* Highlight strip */}
+                          <path d="M320 80 h32 l-28 352 h-32 l28-352 z"
+                                fill="#E6B800" stroke="none" opacity="0.5"/>
+
+                          {/* Foam */}
+                          <path d="M128 64
+                                       c0 -24 24 -40 48 -40
+                                       h160
+                                       c24 0 48 16 48 40
+                                       v16
+                                       h-256
+                                       v-16 z"
+                                fill="#FFFFFF" stroke="#000" stroke-width="16" stroke-linejoin="round"/>
+
+                          {/* Base */}
+                          <rect x="160" y="448" width="192" height="16" fill="#FFFFFF" stroke="#000" stroke-width="8"/>
                         </svg>
                       )}
                     </div>
@@ -401,8 +440,8 @@ function Display() {
         </div>
       ) : cur.type === 'ad' ? (
         <div className="h-full w-full flex items-center justify-center" style={{ 
-          paddingTop: effLogoPosition.startsWith('top') && !(curIsFullscreen || settings?.hideLogoOnAds) ? logoBoxH : '1.5rem',
-          paddingBottom: '1.5rem',
+          paddingTop: effLogoPosition.startsWith('top') && !curIsFullscreen ? logoBoxH : '1.5rem',
+          paddingBottom: footPadPx,
           paddingLeft: '1.5rem',
           paddingRight: '1.5rem',
         }}>
@@ -410,8 +449,8 @@ function Display() {
         </div>
       ) : (
         <div className="h-full w-full grid grid-cols-2 gap-4 items-center justify-center" style={{ 
-          paddingTop: effLogoPosition.startsWith('top') && !(settings?.hideLogoOnAds) ? logoBoxH : '1.5rem',
-          paddingBottom: '1.5rem',
+          paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem',
+          paddingBottom: footPadPx,
           paddingLeft: '1.5rem',
           paddingRight: '1.5rem',
         }}>
@@ -424,25 +463,9 @@ function Display() {
       )}
       {slides.length > 1 && (settings?.showFooter !== false) && !curIsFullscreen && (
         <div className="fixed inset-x-0 bottom-3 flex justify-center">
-          <div className="px-7 py-5 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
+          <div className="px-7 py-2 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
             <div className="flex items-center gap-3">
               <span>Page { (pageIdx % slides.length) + 1 } of { slides.length } • changes in {secs} seconds</span>
-              {controlsVisible && (
-                <>
-                <button onClick={()=>setPaused(p=>!p)} className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white" aria-label={paused? 'Play' : 'Pause'}>
-                  {paused ? (
-                    // Play icon
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M8 5v14l11-7z"/></svg>
-                  ) : (
-                    // Pause icon
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-                  )}
-                </button>
-                <button onClick={()=>{ setPageIdx(p=>p+1); setSecs(settings?.rotationSec ?? 90) }} className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white" aria-label="Next Page">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M7 6h2v12H7zM11 6l8 6-8 6z"/></svg>
-                </button>
-                </>
-              )}
             </div>
             <div className="text-[10px] leading-tight opacity-80">© Not That California R&D</div>
           </div>
@@ -468,7 +491,6 @@ function AdminOverlay({ sizes, settings, onClose, onRefresh, mode, servers, remo
       { key: 'beers', label: 'Beers' },
       { key: 'taps', label: 'Taps' },
       { key: 'media', label: 'Media' },
-      { key: 'devices', label: 'Devices' },
     ] as any : [])
   ]
   const [tab, setTab] = useState<string>('settings')
@@ -490,7 +512,7 @@ function AdminOverlay({ sizes, settings, onClose, onRefresh, mode, servers, remo
         {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={onRefresh} />}
-        {uiMode==='server' && tab === 'devices' && <DevicesPanel onRefresh={onRefresh} />}
+        {/* Devices tab removed */}
       </div>
     </div>
   )
@@ -538,11 +560,10 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
   const [localBgOpacity, setLocalBgOpacity] = useState<number>((settings as any)?.bgOpacity ?? 100)
   const [localPageBgColor, setLocalPageBgColor] = useState<string>((settings as any)?.pageBgColor ?? '#000000')
   const [showFooter, setShowFooter] = useState<boolean>((settings as any)?.showFooter ?? true)
-  const [hideLogoOnAds, setHideLogoOnAds] = useState<boolean>((settings as any)?.hideLogoOnAds ?? false)
   const [localLogoPadX, setLocalLogoPadX] = useState<number>((settings as any)?.logoPadX ?? 8)
   const [localLogoPadY, setLocalLogoPadY] = useState<number>((settings as any)?.logoPadY ?? 8)
   useEffect(()=>{ if (settings) { setTheme(settings.themeMode); setLogoPreview(settings.logoAssetId?`/api/assets/${settings.logoAssetId}/content`:null); setBgPreview(settings.backgroundAssetId?`/api/assets/${settings.backgroundAssetId}/content`:null); setLocalCellScale((settings as any).cellScale ?? 50); setLocalColumnGap((settings as any).columnGap ?? 40); setLocalBeerColumns((settings as any).beerColumns ?? 1); setLocalItemsPerPage((settings as any).itemsPerPage ?? 10); setLocalLogoPosition(((settings as any).logoPosition as any) ?? 'top-center'); setLocalLogoScale((settings as any).logoScale ?? 100); setLocalBgPosition(((settings as any).bgPosition as any) ?? 'center'); setLocalBgScale((settings as any).bgScale ?? 100) } },[settings])
-  useEffect(()=>{ if (settings) { setLogoBgEnabled((settings as any).logoBgEnabled ?? false); setLogoBgColor((settings as any).logoBgColor ?? '#000000'); setLogoBgRounded((settings as any).logoBgRounded ?? false); setLogoBgRadius((settings as any).logoBgRadius ?? 15); setLocalBgOpacity((settings as any).bgOpacity ?? 100); setLocalPageBgColor((settings as any).pageBgColor ?? '#000000'); setShowFooter((settings as any).showFooter ?? true); setHideLogoOnAds((settings as any).hideLogoOnAds ?? false) } }, [settings])
+  useEffect(()=>{ if (settings) { setLogoBgEnabled((settings as any).logoBgEnabled ?? false); setLogoBgColor((settings as any).logoBgColor ?? '#000000'); setLogoBgRounded((settings as any).logoBgRounded ?? false); setLogoBgRadius((settings as any).logoBgRadius ?? 15); setLocalBgOpacity((settings as any).bgOpacity ?? 100); setLocalPageBgColor((settings as any).pageBgColor ?? '#000000'); setShowFooter((settings as any).showFooter ?? true) } }, [settings])
   useEffect(()=>{ if (settings) { setLocalLogoPadX((settings as any).logoPadX ?? 8); setLocalLogoPadY((settings as any).logoPadY ?? 8) } }, [settings])
 
   const saveTheme = async () => {
@@ -569,7 +590,6 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
       bgOpacity: localBgOpacity,
       pageBgColor: localPageBgColor,
       showFooter,
-      hideLogoOnAds,
       logoPadX: localLogoPadX,
       logoPadY: localLogoPadY,
       beerColumns: localBeerColumns,
@@ -633,7 +653,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <label className="flex items-center gap-2"><input type="checkbox" checked={showFooter} onChange={e=>setShowFooter(e.target.checked)} /> Show bottom page counter</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={hideLogoOnAds} onChange={e=>setHideLogoOnAds(e.target.checked)} /> Hide logo on media pages</label>
+        
       </div>
 
       <div>
@@ -648,7 +668,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
           {logoPreview ? (
             <div className="mb-2"><img src={logoPreview} alt="logo" className="h-20 object-contain" /></div>
           ) : <div className="mb-2 text-xs opacity-60">No logo set</div>}
-          <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadAndSet('logo', f) }} />
+          <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadAndSet('logo', f).finally(()=>{ (e.target as HTMLInputElement).value='' }) }} className="block w-full text-sm text-neutral-900 dark:text-neutral-100 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-neutral-700 dark:hover:file:bg-neutral-600" />
           {settings?.logoAssetId && <button onClick={()=>clearImage('logo')} className="ml-2 text-sm px-2 py-1 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Clear</button>}
           <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
             <label className="flex items-center gap-2">Position
@@ -667,7 +687,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2"><input type="checkbox" checked={logoBgEnabled} onChange={e=>setLogoBgEnabled(e.target.checked)} /> Background</label>
               <label className="flex items-center gap-2">Color
-                <input type="color" value={logoBgColor} onChange={e=>setLogoBgColor(e.target.value)} className="h-7 w-10 p-0 border-0 bg-transparent" />
+                <input type="color" value={logoBgColor} onChange={e=>setLogoBgColor(e.target.value)} className="h-7 w-10 p-0 bg-transparent border-2 border-black dark:border-white rounded" />
               </label>
             </div>
             <div className="flex items-center gap-3">
@@ -677,13 +697,15 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
               </label>
             </div>
             <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2">Padding X
+              <label className="flex items-center gap-3">Padding X
                 <input type="range" min={0} max={100} value={localLogoPadX} onChange={e=>setLocalLogoPadX(Number(e.target.value))} />
-                <span className="opacity-70">{localLogoPadX}px</span>
+                <span className="opacity-70 ml-2 min-w-[3.5rem] text-right">{localLogoPadX}px</span>
               </label>
-              <label className="flex items-center gap-2">Padding Y
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-3">Padding Y
                 <input type="range" min={0} max={100} value={localLogoPadY} onChange={e=>setLocalLogoPadY(Number(e.target.value))} />
-                <span className="opacity-70">{localLogoPadY}px</span>
+                <span className="opacity-70 ml-2 min-w-[3.5rem] text-right">{localLogoPadY}px</span>
               </label>
             </div>
           </div>
@@ -693,7 +715,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
           {bgPreview ? (
             <div className="mb-2"><img src={bgPreview} alt="background" className="h-24 object-cover w-full" /></div>
           ) : <div className="mb-2 text-xs opacity-60">No background set</div>}
-          <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadAndSet('background', f) }} />
+          <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadAndSet('background', f).finally(()=>{ (e.target as HTMLInputElement).value='' }) }} className="block w-full text-sm text-neutral-900 dark:text-neutral-100 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-neutral-700 dark:hover:file:bg-neutral-600" />
           {settings?.backgroundAssetId && <button onClick={()=>clearImage('background')} className="ml-2 text-sm px-2 py-1 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Clear</button>}
           <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
             <label className="flex items-center gap-2">Position
@@ -714,7 +736,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
               <span className="opacity-70">{localBgOpacity}%</span>
             </label>
             <label className="flex items-center gap-2">Page Background Color
-              <input type="color" value={localPageBgColor} onChange={e=>setLocalPageBgColor(e.target.value)} className="h-7 w-10 p-0 border-0 bg-transparent" />
+              <input type="color" value={localPageBgColor} onChange={e=>setLocalPageBgColor(e.target.value)} className="h-7 w-10 p-0 bg-transparent border-2 border-black dark:border-white rounded" />
             </label>
           </div>
         </div>
@@ -735,9 +757,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
           <input type="number" min={1} max={500} value={localItemsPerPage} onChange={e=>setLocalItemsPerPage(Math.max(1, Math.min(500, Number(e.target.value)||1)))} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
         </div>
       </div>
-      <div className="pt-4">
-        <LoadingButton onClick={saveTheme} className="px-3 py-1.5 rounded bg-green-700 text-white">Save Theme</LoadingButton>
-      </div>
+      {/* Auto-save active; manual Save not required */}
     </div>
   )
 }
@@ -858,6 +878,7 @@ function SizesPanel({ onRefresh }: { onRefresh: () => void }) {
 
 function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void }) {
   const [beers, setBeers] = useState<Beer[]>([])
+  const [brewery, setBrewery] = useState<string>('')
   const [form, setForm] = useState<{ name:string; brewery:string; style:string; abv?:number; isGuest:boolean; prices: Record<number, number>; colorHex?: string|null }>({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{}, colorHex: null })
   const [file, setFile] = useState<File|null>(null)
   const [editingId, setEditingId] = useState<number|null>(null)
@@ -886,8 +907,21 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div>
         <h3 className="font-semibold mb-2">Beers</h3>
+        <div className="mb-2 flex items-center gap-2 text-sm">
+          <label className="opacity-80">Brewery:</label>
+          <select value={brewery} onChange={e=>setBrewery(e.target.value)} className="px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
+            <option value="">All breweries</option>
+            {Array.from(new Set(beers.map(b=>b.brewery).filter(Boolean))).sort((a,b)=>a.localeCompare(b)).map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
         <ul className="space-y-1 text-sm">
-          {beers.map(b => (
+          {beers
+            .filter(b => !brewery || b.brewery === brewery)
+            .slice()
+            .sort((a,b)=>a.name.localeCompare(b.name))
+            .map(b => (
             <li key={b.id} className="flex items-center justify-between border rounded px-2 py-1 gap-2 border-neutral-300 dark:border-neutral-800">
               <span className="truncate">{b.name} — {b.brewery} • {b.style}{b.abv?` • ${b.abv}%`:''}</span>
               <div className="flex gap-2">
@@ -918,14 +952,14 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
           <div className="border rounded p-2 border-neutral-300 dark:border-neutral-800">
             <div className="font-semibold mb-1">Beer Colour (for icon)</div>
             <div className="flex items-center gap-3">
-              <input type="color" value={form.colorHex || '#000000'} onChange={e=>setForm({...form, colorHex: e.target.value})} className="h-7 w-10 p-0 border-0 bg-transparent" />
+              <input type="color" value={form.colorHex || '#000000'} onChange={e=>setForm({...form, colorHex: e.target.value})} className="h-7 w-10 p-0 bg-transparent border-2 border-black dark:border-white rounded" />
               <button onClick={()=>setForm({...form, colorHex: null})} className="px-2 py-1 rounded bg-neutral-700 text-white">Clear (transparent)</button>
             </div>
             <div className="text-xs opacity-70 mt-1">If transparent, the beer icon is hidden.</div>
           </div>
           <div className="border rounded p-2 border-neutral-300 dark:border-neutral-800">
             <div className="font-semibold mb-1">Badge Image {editingId==null?'(optional)':'(replace optional)'}</div>
-            <input type="file" accept="image/jpeg,image/png" onChange={e=>setFile(e.target.files?.[0] ?? null)} />
+            <input type="file" accept="image/jpeg,image/png" onChange={e=>{ setFile(e.target.files?.[0] ?? null); (e.target as HTMLInputElement).value='' }} className="block w-full text-sm text-neutral-900 dark:text-neutral-100 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-neutral-700 dark:hover:file:bg-neutral-600" />
           </div>
           <div className="flex gap-2">
             <LoadingButton onClick={submit} className="px-3 py-1.5 rounded bg-green-700 text-white">{editingId==null?'Create':'Save'}</LoadingButton>
@@ -1014,6 +1048,7 @@ function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
     const file = e.target.files?.[0]; if(!file) return
     const fd = new FormData(); fd.append('file', file)
     await fetch('/api/upload', { method:'POST', body: fd })
+    ;(e.target as HTMLInputElement).value = ''
     const list = await fetch('/api/assets').then(r=>r.json()); setAssets(list); await onRefresh()
   }
   const remove = async (id:number) => { await fetch(`/api/assets/${id}`, { method:'DELETE' }); const list = await fetch('/api/assets').then(r=>r.json()); setAssets(list); await onRefresh() }
@@ -1023,15 +1058,32 @@ function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
       const list = await fetch('/api/assets').then(r=>r.json()); setAssets(list); await onRefresh()
     }
   }
+  const onDragStart = (e: React.DragEvent<HTMLDivElement>, id:number) => { e.dataTransfer.setData('text/plain', String(id)) }
+  const onDragOver = (e: React.DragEvent) => { e.preventDefault() }
+  const onDrop = async (e: React.DragEvent<HTMLDivElement>, targetId:number) => {
+    e.preventDefault()
+    const srcId = Number(e.dataTransfer.getData('text/plain'))
+    if (!srcId || srcId === targetId) return
+    const order = assets.map(a=>a.id)
+    const from = order.indexOf(srcId)
+    const to = order.indexOf(targetId)
+    if (from<0 || to<0) return
+    order.splice(to, 0, order.splice(from,1)[0])
+    const reordered = order.map(id => assets.find(a=>a.id===id)!).filter(Boolean) as Ad[]
+    setAssets(reordered)
+    await fetch('/api/assets/order', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ids: order }) })
+    await onRefresh()
+  }
   return (
     <div className="space-y-6">
-      <div>
-        <label className="block text-sm mb-1">Upload JPG/PNG</label>
-        <input type="file" accept="image/jpeg,image/png" onChange={upload} />
+      <div className="border border-neutral-300 dark:border-neutral-800 rounded p-3">
+        <div className="font-semibold mb-1">Upload Media</div>
+        <div className="text-xs opacity-80 mb-2">Use for adverts, posters, offers, and other promotional images. JPG/PNG up to 50MB.</div>
+        <input type="file" accept="image/jpeg,image/png" onChange={upload} className="block w-full text-sm text-neutral-900 dark:text-neutral-100 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-neutral-700 dark:hover:file:bg-neutral-600" />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {assets.map(a => (
-          <div key={a.id} className="border rounded p-2 border-neutral-300 dark:border-neutral-800">
+          <div key={a.id} className="border rounded p-2 border-neutral-300 dark:border-neutral-800" draggable onDragStart={(e)=>onDragStart(e,a.id)} onDragOver={onDragOver} onDrop={(e)=>onDrop(e,a.id)}>
             <img src={`/api/assets/${a.id}/content`} alt={a.filename} className="w-full h-32 object-contain bg-neutral-100 dark:bg-neutral-800" />
             <div className="flex items-center justify-between text-xs mt-1">
               <span className="truncate" title={a.filename}>{a.filename}</span>
@@ -1040,7 +1092,7 @@ function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
             <div className="mt-2 text-xs space-y-1">
               <label className="flex items-center gap-2"><input type="checkbox" checked={a.allowPair !== false} onChange={e=>update(a, { allowPair: e.target.checked })} /> Allow pairing</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={!!a.fullscreen} onChange={e=>update(a, { fullscreen: e.target.checked })} /> Fullscreen (hide logo/footer)</label>
-            </div>
+                          </div>
           </div>
         ))}
       </div>

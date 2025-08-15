@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="manifest" href="/manifest.json" />
     <title>Punters</title>
+    <style>
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        background: #2563eb;
+        cursor: pointer;
+        border-radius: 50%;
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        background: #2563eb;
+        cursor: pointer;
+        border-radius: 50%;
+      }
+    </style>
   </head>
   <body class="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100">
     <div id="root"></div>
