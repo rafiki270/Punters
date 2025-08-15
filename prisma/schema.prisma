@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model GlobalSettings {
+  id                 Int      @id
+  themeMode          String   @default("light") // 'light' | 'dark'
+  rotationSec        Int      @default(90)
+  defaultDisplayMode String   @default("all")   // 'all' | 'beer' | 'ads'
+  currency           String   @default("GBP")
+  defaultSizeId      Int?
+  locale             String   @default("en-GB")
+  authEnabled        Boolean  @default(false)
+  adminPasswordHash  String?
+  mode               String   @default("server") // 'server' | 'client'
+  logoAssetId        Int?
+  backgroundAssetId  Int?
+  logoAsset          Asset?   @relation("LogoAsset", fields: [logoAssetId], references: [id])
+  backgroundAsset    Asset?   @relation("BackgroundAsset", fields: [backgroundAssetId], references: [id])
+  // Style defaults (clients inherit unless overridden)
+  cellScale          Int      @default(50)   // 0..100
+  columnGap          Int      @default(40)   // px
+  logoPosition       String   @default("top-left")
+  logoScale          Int      @default(100)  // percent
+  bgPosition         String   @default("center")
+  bgScale            Int      @default(100)  // percent
+  beerColumns        Int      @default(1)
+  itemsPerPage       Int      @default(10)
+  updatedAt          DateTime @updatedAt
+}
+
+model ServeSize {
+  id           Int     @id @default(autoincrement())
+  name         String  @unique
+  volumeMl     Int
+  displayOrder Int     @default(0)
+  prices       Price[]
+  defaultPrices DefaultPrice[]
+}
+
+model Beer {
+  id          Int       @id @default(autoincrement())
+  name        String
+  brewery     String
+  style       String
+  abv         Float?
+  ibu         Int?
+  description String?
+  colorHex    String?
+  tags        String?
+  badgeAssetId Int?
+  badgeAsset   Asset?   @relation("BadgeAsset", fields: [badgeAssetId], references: [id])
+  isGuest     Boolean   @default(false)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  prices      Price[]
+  taps        Tap[]     @relation("TapBeer")
+  tapAssignments TapAssignment[] @relation("TapAssignmentBeer")
+}
+
+model Price {
+  id          Int       @id @default(autoincrement())
+  amountMinor Int
+  currency    String
+  beer        Beer      @relation(fields: [beerId], references: [id])
+  beerId      Int
+  size        ServeSize @relation(fields: [serveSizeId], references: [id])
+  serveSizeId Int
+
+  @@unique([beerId, serveSizeId])
+}
+
+model Tap {
+  number  Int       @id // numeric only, acts as primary key
+  status  String    @default("on")
+  beerId  Int?
+  notes   String?
+  beer    Beer?     @relation("TapBeer", fields: [beerId], references: [id])
+}
+
+model TapAssignment {
+  id            Int       @id @default(autoincrement())
+  tapNumber     Int
+  beerId        Int
+  assignedAt    DateTime  @default(now())
+  removedAt     DateTime?
+  removedReason String?
+  beer          Beer      @relation("TapAssignmentBeer", fields: [beerId], references: [id])
+}
+
+model Device {
+  id              Int      @id @default(autoincrement())
+  name            String
+  role            String   @default("client") // 'main' | 'client'
+  screenGroupId   Int?
+  screenIndex     Int      @default(1)
+  displayMode     String   @default("inherit") // 'inherit' | 'all' | 'beer' | 'ads'
+  beerColumns     Int      @default(1)
+  itemsPerColumn  Int      @default(10)
+  width           Int? 
+  height          Int?
+  orientation     String?  // 'landscape' | 'portrait'
+  lastSeenAt      DateTime?
+  version         String?
+  // Optional style overrides (null = inherit from GlobalSettings)
+  cellScale       Int?
+  columnGap       Int?
+  logoPosition    String?
+  logoScale       Int?
+  bgPosition      String?
+  bgScale         Int?
+}
+
+model ScreenGroup {
+  id          Int     @id @default(autoincrement())
+  name        String
+  screenCount Int     @default(1)
+  playlistId  Int?
+}
+
+model Asset {
+  id        Int      @id @default(autoincrement())
+  type      String   // 'image'
+  filename  String
+  mimeType  String
+  width     Int?
+  height    Int?
+  sizeBytes Int
+  data      Bytes?
+  tags      String?
+  createdAt DateTime @default(now())
+  beersWithBadge Beer[] @relation("BadgeAsset")
+  globalLogo GlobalSettings[] @relation("LogoAsset")
+  globalBackground GlobalSettings[] @relation("BackgroundAsset")
+}
+
+model DefaultPrice {
+  id          Int       @id @default(autoincrement())
+  serveSize   ServeSize @relation(fields: [serveSizeId], references: [id])
+  serveSizeId Int
+  amountMinor Int
+  isGuest     Boolean   @default(false)
+
+  @@unique([serveSizeId, isGuest])
+}

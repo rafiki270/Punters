@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  punters:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=file:/data/dev.db
+    volumes:
+      - ./data:/data

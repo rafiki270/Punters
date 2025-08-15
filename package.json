@@ -1,0 +1,38 @@
+{
+  "name": "punters",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Punters Taproom Display - single server (Fastify) + React PWA",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build:server": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "db:seed": "ts-node prisma/seed.ts",
+    "build:web": "npm --prefix web run build",
+    "dev:web": "npm --prefix web run dev",
+    "preview:web": "npm --prefix web run preview",
+    "build": "npm run build:web && npm run build:server"
+  },
+  "dependencies": {
+    "bonjour-service": "^1.1.1",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/multipart": "^9.0.3",
+    "@fastify/static": "^8.0.0",
+    "@fastify/cookie": "^11.0.0",
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "fastify": "^5.0.0",
+    "image-size": "^1.1.4",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.7.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "prisma": "^5.16.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.5.4"
+  }
+}

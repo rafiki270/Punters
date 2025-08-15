@@ -1,0 +1,76 @@
+import { FastifyInstance } from 'fastify'
+import { ImageInfo } from 'image-size'
+import { imageSize } from 'image-size'
+import { prisma } from '../db'
+import { requireAdmin } from '../auth'
+
+export async function registerMediaRoutes(app: FastifyInstance) {
+  app.get('/api/assets', async () => {
+    // Only list advert images (exclude beer badges and style assets like logo/background)
+    return prisma.asset.findMany({
+      where: {
+        beersWithBadge: { none: {} },
+        OR: [
+          { tags: null },
+          { tags: '' },
+          { tags: { notIn: ['style:logo', 'style:background'] } },
+        ]
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+  })
+
+  app.post('/api/upload', { preHandler: requireAdmin }, async (req, reply) => {
+    const mp = await (req as any).file()
+    if (!mp) return reply.code(400).send({ error: 'No file' })
+    const mime = mp.mimetype || ''
+    if (!['image/jpeg', 'image/png'].includes(mime)) {
+      return reply.code(400).send({ error: 'Only JPG/PNG allowed' })
+    }
+    const maxBytes = 10 * 1024 * 1024
+    if (Number(mp.fields?.file?.value?.byteLength || mp.file?.bytesRead) > maxBytes) {
+      return reply.code(400).send({ error: 'File too large' })
+    }
+    const chunks: Buffer[] = []
+    for await (const chunk of mp.file) chunks.push(chunk as Buffer)
+    const buf = Buffer.concat(chunks)
+    let dims: ImageInfo | undefined
+    try { dims = imageSize(buf) } catch {}
+
+    const tag = (mp.fields?.tag?.value as string | undefined) || ''
+    const asset = await prisma.asset.create({
+      data: {
+        type: 'image',
+        filename: mp.filename || 'upload',
+        mimeType: mime,
+        width: typeof dims?.width === 'number' ? dims!.width : null as any,
+        height: typeof dims?.height === 'number' ? dims!.height : null as any,
+        sizeBytes: buf.length,
+        data: buf,
+        tags: tag
+      }
+    })
+    return asset
+  })
+
+  app.delete('/api/assets/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const id = Number((req.params as any).id)
+    // Prevent deleting assets that are in use as beer badges
+    const inUse = await prisma.beer.count({ where: { badgeAssetId: id } })
+    if (inUse > 0) {
+      return reply.code(400).send({ error: 'Asset is used by a beer badge and cannot be deleted from Media.' })
+    }
+    await prisma.asset.delete({ where: { id } }).catch(() => {})
+    return { ok: true }
+  })
+
+  // Stream asset content from DB
+  app.get('/api/assets/:id/content', async (req, reply) => {
+    const id = Number((req.params as any).id)
+    const asset = await prisma.asset.findUnique({ where: { id } })
+    if (!asset || !asset.data) return reply.code(404).send({ error: 'Not found' })
+    reply.header('Content-Type', asset.mimeType)
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+    return reply.send(Buffer.from(asset.data))
+  })
+}
