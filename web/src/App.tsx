@@ -275,16 +275,19 @@ function Display() {
       {showInfo && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center text-neutral-900 dark:text-neutral-100" onClick={()=>setShowInfo(false)}>
           <div className="relative max-w-3xl mx-4 bg-white/95 dark:bg-neutral-900/95 border border-neutral-300 dark:border-neutral-700 rounded-lg shadow-xl p-6 text-center">
-            <img src={(settings?.themeMode||'dark')==='dark' ? '/logo_white.png' : '/logo_black.png'} alt="logo" className="absolute top-3 right-3 h-10 w-auto opacity-90" />
-            <div className="space-y-3">
-              <div className="text-sm opacity-80">Punters is an application brought to you by</div>
-              <div className="text-2xl md:text-4xl font-extrabold">Not That California Brewing Co.</div>
-              <div className="text-xs md:text-sm opacity-80">California, Scotland</div>
-              <div className="text-xs md:text-sm break-words">
-                order beers on <a href="https://www.notthatcalifornia.com" target="_blank" rel="noreferrer" className="underline">www.notthatcalifornia.com</a>
-                {' '}call <a href="tel:07972574949" className="underline">07972574949</a> or email <a href="mailto:sales@notthatcalifornia.com" className="underline">sales@notthatcalifornia.com</a>
+            <div className="flex flex-col items-center">
+              <img src={(settings?.themeMode||'dark')==='dark' ? '/logo_white.png' : '/logo_black.png'} alt="logo" className="h-24 w-auto" />
+              <div className="space-y-6 mt-6">
+                <div className="text-sm opacity-80">Punters is an application brought to you by</div>
+                <div className="text-2xl md:text-4xl font-extrabold">Not That California Brewing Co.</div>
+                <div className="text-xs md:text-sm opacity-80">California, Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿</div>
+                <div className="text-xs md:text-sm break-words">
+                  <div>order beers on <a href="https://www.notthatcalifornia.com" target="_blank" rel="noreferrer" className="underline">www.notthatcalifornia.com</a></div>
+                  <div>call <a href="tel:07972574949" className="underline">07972574949</a></div>
+                  <div>email <a href="mailto:sales@notthatcalifornia.com" className="underline">sales@notthatcalifornia.com</a></div>
+                </div>
+                <div className="text-[11px] opacity-70">Click anywhere to close</div>
               </div>
-              <div className="text-[11px] opacity-70">Click anywhere to close</div>
             </div>
           </div>
         </div>
