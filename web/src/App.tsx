@@ -329,6 +329,7 @@ function Display() {
       {/* Admin overlay */}
       {adminOpen && (
         <AdminOverlay
+          isOpen={adminOpen} // New prop
           sizes={sizes}
           settings={settings}
           onClose={() => setAdminOpen(false)}
@@ -481,7 +482,7 @@ export default function App() {
 }
 
 // ----- Admin Overlay Components -----
-function AdminOverlay({ sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage }: { sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'ads')=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void }) {
+function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage }: { isOpen: boolean; sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'ads')=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void }) {
   const [uiMode, setUiMode] = useState<'server'|'client'>(mode)
   const tabs: Array<{key: string; label: string}> = [
     { key: 'settings', label: 'Settings' },
@@ -495,9 +496,24 @@ function AdminOverlay({ sizes, settings, onClose, onRefresh, mode, servers, remo
   ]
   const [tab, setTab] = useState<string>('settings')
   useEffect(()=>{ if (uiMode !== 'server' && tab !== 'settings') setTab('settings') }, [uiMode, tab])
+
+  const [shouldRender, setShouldRender] = useState(isOpen);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+    } else {
+      const timer = setTimeout(() => setShouldRender(false), 300); // Match duration
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  if (!shouldRender) return null;
+
   return (
-    <div className="fixed inset-0 z-20" onClick={onClose}>
-      <div className="absolute right-3 top-12 w-[95vw] max-w-5xl max-h-[85vh] overflow-auto rounded-md bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 shadow-xl p-4" onClick={(e)=>e.stopPropagation()}>
+    <div className={`fixed inset-0 z-20 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`} onClick={onClose}>
+      <div className={`absolute right-3 top-12 w-[95vw] max-w-5xl max-h-[85vh] overflow-auto rounded-md bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 border border-neutral-300 dark:border-neutral-700 shadow-xl p-4
+        transition-all duration-300 ease-out transform ${isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`} onClick={(e)=>e.stopPropagation()}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex gap-2 text-sm">
               {tabs.map(t => (
@@ -881,6 +897,8 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
   const [brewery, setBrewery] = useState<string>('')
   const [form, setForm] = useState<{ name:string; brewery:string; style:string; abv?:number; isGuest:boolean; prices: Record<number, number>; colorHex?: string|null }>({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{}, colorHex: null })
   const [file, setFile] = useState<File|null>(null)
+  const [breweryOpen, setBreweryOpen] = useState(false)
+  const breweryList = useMemo(() => Array.from(new Set(beers.map(b=>b.brewery).filter(Boolean))).sort((a,b)=>a.localeCompare(b)), [beers])
   const [editingId, setEditingId] = useState<number|null>(null)
   useEffect(()=>{ fetch('/api/beers').then(r=>r.json()).then(setBeers)},[])
   const submit = async () => {
@@ -936,7 +954,30 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
         <h3 className="font-semibold mb-2">{editingId==null?'Add Beer':'Edit Beer'}</h3>
         <div className="space-y-4 text-sm">
           <input placeholder="Name" value={form.name} onChange={e=>setForm({...form, name:e.target.value})} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
-          <input placeholder="Brewery" value={form.brewery} onChange={e=>setForm({...form, brewery:e.target.value})} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+          <div className="relative">
+            <input
+              placeholder="Brewery"
+              value={form.brewery}
+              onChange={e=>{ setForm({...form, brewery:e.target.value}); setBreweryOpen(true) }}
+              onFocus={()=>setBreweryOpen(true)}
+              onBlur={()=>setTimeout(()=>setBreweryOpen(false), 150)}
+              className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700"
+            />
+            {breweryOpen && (form.brewery||'').length > 0 && (
+              <div className="absolute z-20 mt-1 w-full max-h-48 overflow-auto rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow">
+                {breweryList.filter(n => n.toLowerCase().includes((form.brewery||'').toLowerCase())).slice(0,10).map(name => (
+                  <div key={name}
+                       onMouseDown={(e)=>{ e.preventDefault(); setForm({...form, brewery: name}); setBreweryOpen(false) }}
+                       className="px-2 py-1 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                    {name}
+                  </div>
+                ))}
+                {breweryList.filter(n => n.toLowerCase().includes((form.brewery||'').toLowerCase())).length===0 && (
+                  <div className="px-2 py-1 opacity-60 text-sm">No matches</div>
+                )}
+              </div>
+            )}
+          </div>
           <input placeholder="Style" value={form.style} onChange={e=>setForm({...form, style:e.target.value})} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
           <input type="number" step="0.1" placeholder="ABV" value={form.abv ?? ''} onChange={e=>setForm({...form, abv: e.target.value?Number(e.target.value):undefined})} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.isGuest} onChange={e=>setForm({...form, isGuest:e.target.checked})} /> Guest Beer</label>
