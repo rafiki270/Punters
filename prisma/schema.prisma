@@ -25,10 +25,18 @@ model GlobalSettings {
   // Style defaults (clients inherit unless overridden)
   cellScale          Int      @default(50)   // 0..100
   columnGap          Int      @default(40)   // px
-  logoPosition       String   @default("top-left")
+  logoPosition       String   @default("top-center")
   logoScale          Int      @default(100)  // percent
   bgPosition         String   @default("center")
   bgScale            Int      @default(100)  // percent
+  // New style options
+  logoBgEnabled      Boolean  @default(false)
+  logoBgColor        String   @default("#000000")
+  logoBgRounded      Boolean  @default(false)
+  logoBgRadius       Int      @default(15)
+  bgOpacity          Int      @default(100)  // 0..100 percent
+  logoPadX           Int      @default(8)
+  logoPadY           Int      @default(8)
   beerColumns        Int      @default(1)
   itemsPerPage       Int      @default(10)
   updatedAt          DateTime @updatedAt

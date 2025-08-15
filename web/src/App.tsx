@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 
-type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number }
+type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number }
 type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number } }
 type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[] }
 type TapBeer = { tapNumber: number; status: string; beer: Beer|null }
@@ -69,6 +69,7 @@ function Display() {
   const [ads, setAds] = useState<Ad[]>([])
   const [pageIdx, setPageIdx] = useState(0)
   const [secs, setSecs] = useState(0)
+  const [paused, setPaused] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const controlsVisible = useAutoHide(10000)
   const [sizes, setSizes] = useState<Size[]>([])
@@ -130,6 +131,7 @@ function Display() {
     const dur = settings?.rotationSec ?? 90
     setSecs(dur)
     const id = setInterval(() => setSecs((s) => {
+      if (paused) return s
       if (s <= 1) {
         setPageIdx((p) => p + 1)
         return dur
@@ -137,7 +139,7 @@ function Display() {
       return s - 1
     }), 1000)
     return () => clearInterval(id)
-  }, [settings?.rotationSec])
+  }, [settings?.rotationSec, paused])
 
   // Keep tap context so duplicates of the same beer on different taps are supported
   const tapBeers = useMemo(() => taps.filter(t => t.beer != null).map(t => ({ tapNumber: t.tapNumber, beer: t.beer as Beer })), [taps])
@@ -180,16 +182,47 @@ function Display() {
   const logoUrl = settings?.logoAssetId ? `${contentBase}/api/assets/${settings.logoAssetId}/content` : null
   const effCellScale = (device?.cellScale ?? settings?.cellScale ?? 50)
   const effColumnGap = (device?.columnGap ?? settings?.columnGap ?? 40)
-  const effLogoPosition = (device?.logoPosition ?? settings?.logoPosition ?? 'top-left') as 'top-left'|'top-right'|'bottom-left'|'bottom-right'
+  const effLogoPosition = (device?.logoPosition ?? settings?.logoPosition ?? 'top-center') as 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'
   const effLogoScale = (device?.logoScale ?? settings?.logoScale ?? 100)
   const effBgPosition = (device?.bgPosition ?? settings?.bgPosition ?? 'center') as 'center'|'top'|'bottom'|'left'|'right'
   const effBgScale = (device?.bgScale ?? settings?.bgScale ?? 100)
+  const effBgOpacity = settings?.bgOpacity ?? 100
+  const effLogoPadX = settings?.logoPadX ?? 8
+  const effLogoPadY = settings?.logoPadY ?? 8
   useEffect(() => {
     const isDark = (settings?.themeMode || 'dark') === 'dark'
     document.documentElement.classList.toggle('dark', isDark)
   }, [settings?.themeMode])
+  const logoPosClass = effLogoPosition === 'top-center'
+    ? 'top-3 left-1/2 -translate-x-1/2'
+    : `${effLogoPosition.includes('top') ? 'top-3' : 'bottom-3'} ${effLogoPosition.includes('left') ? 'left-3' : 'right-3'}`
+
+  const logoContainerStyle: React.CSSProperties | undefined = settings?.logoBgEnabled ? {
+    backgroundColor: settings.logoBgColor || '#000000',
+    borderRadius: (settings.logoBgRounded ? (settings.logoBgRadius ?? 15) : 0),
+    padding: `${effLogoPadY}px ${effLogoPadX}px`,
+  } : undefined
+
+  // Measure logo to add top padding when logo is at top
+  const logoRef = useRef<HTMLDivElement | null>(null)
+  const [logoBoxH, setLogoBoxH] = useState<number>(0)
+  useEffect(() => {
+    const measure = () => {
+      if (logoRef.current) setLogoBoxH(Math.round(logoRef.current.getBoundingClientRect().height + 12))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [logoUrl, effLogoScale, effCellScale, effLogoPosition, effLogoPadX, effLogoPadY, settings?.logoBgEnabled, settings?.logoBgRounded, settings?.logoBgRadius])
+
   return (
-    <div className="h-screen overflow-hidden p-6 text-neutral-900 dark:text-neutral-100" style={bgUrl?{backgroundImage:`url(${bgUrl})`, backgroundSize: `${effBgScale}%`, backgroundPosition: effBgPosition }:undefined}>
+    <div className="relative h-screen overflow-hidden p-6 text-neutral-900 dark:text-neutral-100">
+      {bgUrl && (
+        <div
+          className="absolute inset-0 -z-10 bg-no-repeat bg-center"
+          style={{ backgroundImage: `url(${bgUrl})`, backgroundSize: `${effBgScale}%`, backgroundPosition: effBgPosition, opacity: Math.max(0, Math.min(1, effBgOpacity/100)) }}
+        />
+      )}
       {/* Floating controls (auto-hide) */}
       <div className={`fixed top-3 right-3 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto`}>
         <button onClick={() => setAdminOpen((v) => !v)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
@@ -199,8 +232,10 @@ function Display() {
 
       {/* Optional logo */}
       {logoUrl && (
-        <div className={`fixed pointer-events-none ${effLogoPosition.includes('top')?'top-3':'bottom-3'} ${effLogoPosition.includes('left')?'left-3':'right-3'}`}>
-          <img src={logoUrl} alt="logo" style={{ width: Math.round((96 * (0.7 + (effCellScale/100)*1.5)) * (effLogoScale/100)) }} className="object-contain max-h-[20vh]" />
+        <div ref={logoRef} className={`fixed pointer-events-none ${logoPosClass}`}>
+          <div style={logoContainerStyle} className="inline-block">
+            <img src={logoUrl} alt="logo" style={{ width: Math.round((96 * (0.7 + (effCellScale/100)*1.5)) * (effLogoScale/100)) }} className="object-contain max-h-[20vh]" />
+          </div>
         </div>
       )}
 
@@ -226,7 +261,7 @@ function Display() {
         </div>
       )}
       {cur.type === 'beer' ? (
-        <div>
+        <div style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : 0 }}>
           {tapBeers.length === 0 ? (
             <div className="h-[80vh] flex items-center justify-center text-center">
               <div className="text-3xl font-semibold opacity-70">No beers are set yet</div>
@@ -265,13 +300,27 @@ function Display() {
           )}
         </div>
       ) : (
-        <div className="h-[80vh] w-full flex items-center justify-center">
+        <div className="h-[80vh] w-full flex items-center justify-center" style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : 0 }}>
           <img src={`${contentBase}/api/assets/${(cur.data as Ad).id}/content`} alt={cur.data.filename} className="max-h-full max-w-full object-contain" />
         </div>
       )}
       {slides.length > 1 && (
-        <div className="mt-8 border-t pt-4 text-sm opacity-80">
-          Page { (pageIdx % slides.length) + 1 } of { slides.length } • changes in {secs} seconds
+        <div className="fixed inset-x-0 bottom-3 flex justify-center">
+          <div className="px-3 py-5 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex items-center gap-3">
+            <span>Page { (pageIdx % slides.length) + 1 } of { slides.length } • changes in {secs} seconds</span>
+            {controlsVisible && (
+              <button onClick={()=>setPaused(p=>!p)} className="ml-2 h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white" aria-label={paused? 'Play' : 'Pause'}>
+                {paused ? (
+                  // Play icon
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M8 5v14l11-7z"/></svg>
+                ) : (
+                  // Pause icon
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+                )}
+              </button>
+            )}
+            <div className="text-[10px] leading-tight opacity-80">© Not That California R&D</div>
+          </div>
         </div>
       )}
     </div>
@@ -353,11 +402,20 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
   const [localColumnGap, setLocalColumnGap] = useState<number>((settings as any)?.columnGap ?? 40)
   const [localBeerColumns, setLocalBeerColumns] = useState<number>((settings as any)?.beerColumns ?? 1)
   const [localItemsPerPage, setLocalItemsPerPage] = useState<number>((settings as any)?.itemsPerPage ?? 10)
-  const [localLogoPosition, setLocalLogoPosition] = useState<'top-left'|'top-right'|'bottom-left'|'bottom-right'>(((settings as any)?.logoPosition as any) ?? 'top-left')
+  const [localLogoPosition, setLocalLogoPosition] = useState<'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'>(((settings as any)?.logoPosition as any) ?? 'top-center')
   const [localLogoScale, setLocalLogoScale] = useState<number>((settings as any)?.logoScale ?? 100)
   const [localBgPosition, setLocalBgPosition] = useState<'center'|'top'|'bottom'|'left'|'right'>(((settings as any)?.bgPosition as any) ?? 'center')
   const [localBgScale, setLocalBgScale] = useState<number>((settings as any)?.bgScale ?? 100)
-  useEffect(()=>{ if (settings) { setTheme(settings.themeMode); setLogoPreview(settings.logoAssetId?`/api/assets/${settings.logoAssetId}/content`:null); setBgPreview(settings.backgroundAssetId?`/api/assets/${settings.backgroundAssetId}/content`:null); setLocalCellScale((settings as any).cellScale ?? 50); setLocalColumnGap((settings as any).columnGap ?? 40); setLocalBeerColumns((settings as any).beerColumns ?? 1); setLocalItemsPerPage((settings as any).itemsPerPage ?? 10); setLocalLogoPosition(((settings as any).logoPosition as any) ?? 'top-left'); setLocalLogoScale((settings as any).logoScale ?? 100); setLocalBgPosition(((settings as any).bgPosition as any) ?? 'center'); setLocalBgScale((settings as any).bgScale ?? 100) } },[settings])
+  const [logoBgEnabled, setLogoBgEnabled] = useState<boolean>((settings as any)?.logoBgEnabled ?? false)
+  const [logoBgColor, setLogoBgColor] = useState<string>((settings as any)?.logoBgColor ?? '#000000')
+  const [logoBgRounded, setLogoBgRounded] = useState<boolean>((settings as any)?.logoBgRounded ?? false)
+  const [logoBgRadius, setLogoBgRadius] = useState<number>((settings as any)?.logoBgRadius ?? 15)
+  const [localBgOpacity, setLocalBgOpacity] = useState<number>((settings as any)?.bgOpacity ?? 100)
+  const [localLogoPadX, setLocalLogoPadX] = useState<number>((settings as any)?.logoPadX ?? 8)
+  const [localLogoPadY, setLocalLogoPadY] = useState<number>((settings as any)?.logoPadY ?? 8)
+  useEffect(()=>{ if (settings) { setTheme(settings.themeMode); setLogoPreview(settings.logoAssetId?`/api/assets/${settings.logoAssetId}/content`:null); setBgPreview(settings.backgroundAssetId?`/api/assets/${settings.backgroundAssetId}/content`:null); setLocalCellScale((settings as any).cellScale ?? 50); setLocalColumnGap((settings as any).columnGap ?? 40); setLocalBeerColumns((settings as any).beerColumns ?? 1); setLocalItemsPerPage((settings as any).itemsPerPage ?? 10); setLocalLogoPosition(((settings as any).logoPosition as any) ?? 'top-center'); setLocalLogoScale((settings as any).logoScale ?? 100); setLocalBgPosition(((settings as any).bgPosition as any) ?? 'center'); setLocalBgScale((settings as any).bgScale ?? 100) } },[settings])
+  useEffect(()=>{ if (settings) { setLogoBgEnabled((settings as any).logoBgEnabled ?? false); setLogoBgColor((settings as any).logoBgColor ?? '#000000'); setLogoBgRounded((settings as any).logoBgRounded ?? false); setLogoBgRadius((settings as any).logoBgRadius ?? 15); setLocalBgOpacity((settings as any).bgOpacity ?? 100) } }, [settings])
+  useEffect(()=>{ if (settings) { setLocalLogoPadX((settings as any).logoPadX ?? 8); setLocalLogoPadY((settings as any).logoPadY ?? 8) } }, [settings])
 
   const saveTheme = async () => {
     await fetch('/api/settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
@@ -376,11 +434,27 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
       logoScale: localLogoScale,
       bgPosition: localBgPosition,
       bgScale: localBgScale,
+      logoBgEnabled,
+      logoBgColor,
+      logoBgRounded,
+      logoBgRadius,
+      bgOpacity: localBgOpacity,
+      logoPadX: localLogoPadX,
+      logoPadY: localLogoPadY,
       beerColumns: localBeerColumns,
       itemsPerPage: localItemsPerPage,
     }) })
     await onRefresh()
   }
+
+  // Auto-save on change (debounced)
+  const saveTimer = useRef<any>(null)
+  useEffect(() => {
+    if (!settings) return
+    if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    saveTimer.current = window.setTimeout(() => { saveTheme() }, 600)
+    return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current) }
+  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localItemsPerPage, localLogoPadX, localLogoPadY])
 
   const uploadAndSet = async (kind: 'logo'|'background', file: File) => {
     const fd = new FormData(); fd.append('file', file); fd.append('tag', kind==='logo'?'style:logo':'style:background')
@@ -424,7 +498,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
           <option value="dark">Dark</option>
           <option value="light">Light</option>
         </select>
-        <LoadingButton onClick={saveTheme} className="ml-2 px-3 py-1.5 rounded bg-green-700 text-white">Save Theme</LoadingButton>
+        
       </div>
 
       <div>
@@ -434,17 +508,18 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
+        <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
           <div className="font-semibold mb-1">Logo</div>
           {logoPreview ? (
             <div className="mb-2"><img src={logoPreview} alt="logo" className="h-20 object-contain" /></div>
           ) : <div className="mb-2 text-xs opacity-60">No logo set</div>}
           <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadAndSet('logo', f) }} />
           {settings?.logoAssetId && <button onClick={()=>clearImage('logo')} className="ml-2 text-sm px-2 py-1 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Clear</button>}
-          <div className="mt-2 flex items-center gap-3 text-sm">
+          <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
             <label className="flex items-center gap-2">Position
               <select value={localLogoPosition} onChange={e=>setLocalLogoPosition(e.target.value as any)} className="px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
                 <option value="top-left">Top Left</option>
+                <option value="top-center">Top Center</option>
                 <option value="top-right">Top Right</option>
                 <option value="bottom-left">Bottom Left</option>
                 <option value="bottom-right">Bottom Right</option>
@@ -454,16 +529,38 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
               <input type="range" min={10} max={300} value={localLogoScale} onChange={e=>setLocalLogoScale(Number(e.target.value))} />
               <span className="opacity-70">{localLogoScale}%</span>
             </label>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={logoBgEnabled} onChange={e=>setLogoBgEnabled(e.target.checked)} /> Background</label>
+              <label className="flex items-center gap-2">Color
+                <input type="color" value={logoBgColor} onChange={e=>setLogoBgColor(e.target.value)} className="h-7 w-10 p-0 border-0 bg-transparent" />
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={logoBgRounded} onChange={e=>setLogoBgRounded(e.target.checked)} /> Rounded Corners</label>
+              <label className="flex items-center gap-2">Radius
+                <input type="number" min={0} max={200} value={logoBgRadius} onChange={e=>setLogoBgRadius(Math.max(0, Math.min(200, Number(e.target.value)||0)))} className="w-24 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+              </label>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2">Padding X
+                <input type="range" min={0} max={100} value={localLogoPadX} onChange={e=>setLocalLogoPadX(Number(e.target.value))} />
+                <span className="opacity-70">{localLogoPadX}px</span>
+              </label>
+              <label className="flex items-center gap-2">Padding Y
+                <input type="range" min={0} max={100} value={localLogoPadY} onChange={e=>setLocalLogoPadY(Number(e.target.value))} />
+                <span className="opacity-70">{localLogoPadY}px</span>
+              </label>
+            </div>
           </div>
         </div>
-        <div>
+        <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
           <div className="font-semibold mb-1">Background</div>
           {bgPreview ? (
             <div className="mb-2"><img src={bgPreview} alt="background" className="h-24 object-cover w-full" /></div>
           ) : <div className="mb-2 text-xs opacity-60">No background set</div>}
           <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadAndSet('background', f) }} />
           {settings?.backgroundAssetId && <button onClick={()=>clearImage('background')} className="ml-2 text-sm px-2 py-1 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Clear</button>}
-          <div className="mt-2 flex items-center gap-3 text-sm">
+          <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
             <label className="flex items-center gap-2">Position
               <select value={localBgPosition} onChange={e=>setLocalBgPosition(e.target.value as any)} className="px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
                 <option value="center">Center</option>
@@ -476,6 +573,10 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
             <label className="flex items-center gap-2">Size
               <input type="range" min={50} max={300} value={localBgScale} onChange={e=>setLocalBgScale(Number(e.target.value))} />
               <span className="opacity-70">{localBgScale}%</span>
+            </label>
+            <label className="flex items-center gap-2">Opacity
+              <input type="range" min={0} max={100} value={localBgOpacity} onChange={e=>setLocalBgOpacity(Number(e.target.value))} />
+              <span className="opacity-70">{localBgOpacity}%</span>
             </label>
           </div>
         </div>
@@ -495,6 +596,9 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
           <label className="block text-sm mb-1">Items per Page (default)</label>
           <input type="number" min={1} max={500} value={localItemsPerPage} onChange={e=>setLocalItemsPerPage(Math.max(1, Math.min(500, Number(e.target.value)||1)))} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
         </div>
+      </div>
+      <div className="pt-4">
+        <LoadingButton onClick={saveTheme} className="px-3 py-1.5 rounded bg-green-700 text-white">Save Theme</LoadingButton>
       </div>
     </div>
   )
