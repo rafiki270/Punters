@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 
-type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number }
-type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number } }
-type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[] }
+type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean; hideLogoOnAds?: boolean }
+type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number; volumeMl?: number } }
+type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[]; colorHex?: string|null }
 type TapBeer = { tapNumber: number; status: string; beer: Beer|null }
-type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null }
+type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean }
 type Size = { id: number; name: string; volumeMl: number; displayOrder: number }
 type Discovered = { name: string; host: string; port: number; addresses: string[] }
-type Device = { id:number; name:string; displayMode:'inherit'|'all'|'beer'|'ads'; beerColumns:number; itemsPerColumn:number; cellScale?:number|null; columnGap?:number|null; logoPosition?: 'top-left'|'top-right'|'bottom-left'|'bottom-right' | null; logoScale?: number|null; bgPosition?: 'center'|'top'|'bottom'|'left'|'right' | null; bgScale?: number|null }
+type Device = { id:number; name:string; displayMode:'inherit'|'all'|'beer'|'ads'; beerColumns:number; itemsPerColumn:number; cellScale?:number|null; columnGap?:number|null; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right' | null; logoScale?: number|null; bgPosition?: 'center'|'top'|'bottom'|'left'|'right' | null; bgScale?: number|null }
 
 // Simple overlay that auto-hides the controls when idle
 function useAutoHide(delayMs: number) {
@@ -71,6 +71,7 @@ function Display() {
   const [secs, setSecs] = useState(0)
   const [paused, setPaused] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
   const controlsVisible = useAutoHide(10000)
   const [sizes, setSizes] = useState<Size[]>([])
   const [mode, setMode] = useState<'server'|'client'>('server')
@@ -78,6 +79,7 @@ function Display() {
   const [remoteBase, setRemoteBase] = useState<string | null>(null)
   const [device, setDevice] = useState<Device | null>(null)
   const [localDisplayMode, setLocalDisplayMode] = useState<'all'|'beer'|'ads'>(()=> (localStorage.getItem('localDisplayMode') as any) || 'all')
+  const [isFullscreen, setIsFullscreen] = useState(false)
   // Beer columns and items per page are now global defaults (server) with device overrides
   // Style values now inherit from server settings by default; device may override
   // Local client-only fallbacks retained for Items per Page only.
@@ -87,6 +89,24 @@ function Display() {
     const id = sp.get('deviceId')
     return id ? Number(id) : null
   }, [])
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen()
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      }
+    }
+  }
 
   async function loadAll() {
     try {
@@ -144,15 +164,10 @@ function Display() {
   // Keep tap context so duplicates of the same beer on different taps are supported
   const tapBeers = useMemo(() => taps.filter(t => t.beer != null).map(t => ({ tapNumber: t.tapNumber, beer: t.beer as Beer })), [taps])
 
-  function formatPrice(prices: Price[]): string | null {
-    if (!prices || prices.length === 0) return null
-    const defId = settings?.defaultSizeId ?? null
-    let p: Price | undefined
-    if (defId) p = prices.find(pr => pr.serveSizeId === defId)
-    if (!p) p = prices.sort((a,b) => (a.size?.displayOrder ?? 0) - (b.size?.displayOrder ?? 0))[0]
-    const cur = p.currency || settings?.currency || 'GBP'
+  function formatMoney(amountMinor: number, currency?: string): string {
+    const cur = currency || settings?.currency || 'GBP'
     const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency: cur })
-    return formatter.format((p.amountMinor || 0) / 100)
+    return formatter.format((amountMinor || 0) / 100)
   }
 
   // Build slides: beer pages then each ad image
@@ -164,18 +179,33 @@ function Display() {
   }, [tapBeers, columns, itemsPerColumn, device?.itemsPerColumn, settings?.itemsPerPage])
 
   const slides = useMemo(() => {
-    const s: { type: 'beer'|'ad'; data: any }[] = []
+    type Slide = { type: 'beer'|'ad'|'adpair'; data: any }
+    const s: Slide[] = []
     beerPages.forEach(pg => s.push({ type: 'beer', data: pg }))
-    ads.forEach(ad => s.push({ type: 'ad', data: ad }))
+    // Build ad slides with pairing
+    const fullscreenAds = ads.filter(a => a.fullscreen)
+    const others = ads.filter(a => !a.fullscreen)
+    const pairablePortraits = others.filter(a => (a.allowPair !== false) && (Number(a.height||0) > Number(a.width||0)))
+    const nonPairables = others.filter(a => !((a.allowPair !== false) && (Number(a.height||0) > Number(a.width||0))))
+    for (let i = 0; i + 1 < pairablePortraits.length; i += 2) {
+      s.push({ type: 'adpair', data: [pairablePortraits[i], pairablePortraits[i+1]] })
+    }
+    if (pairablePortraits.length % 2 === 1) {
+      s.push({ type: 'ad', data: pairablePortraits[pairablePortraits.length - 1] })
+    }
+    nonPairables.forEach(ad => s.push({ type: 'ad', data: ad }))
+    fullscreenAds.forEach(ad => s.push({ type: 'ad', data: ad }))
     // Determine effective mode
     let modeEff: 'all'|'beer'|'ads' = 'all'
     if (device && device.displayMode !== 'inherit') modeEff = device.displayMode
     else modeEff = localDisplayMode
-    const filtered = s.filter(sl => modeEff === 'all' ? true : (modeEff === 'beer' ? sl.type==='beer' : sl.type==='ad'))
+    const filtered = s.filter(sl => modeEff === 'all' ? true : (modeEff === 'beer' ? sl.type==='beer' : (sl.type==='ad' || sl.type==='adpair')))
     return filtered.length ? filtered : [{ type: 'beer', data: [] }]
   }, [beerPages, ads])
 
   const cur = slides[pageIdx % slides.length]
+  const curIsAd = cur.type === 'ad' || cur.type === 'adpair'
+  const curIsFullscreen = cur.type === 'ad' && (cur.data as Ad)?.fullscreen
 
   const contentBase = (mode==='client' && remoteBase) ? remoteBase : ''
   const bgUrl = settings?.backgroundAssetId ? `${contentBase}/api/assets/${settings.backgroundAssetId}/content` : null
@@ -216,7 +246,7 @@ function Display() {
   }, [logoUrl, effLogoScale, effCellScale, effLogoPosition, effLogoPadX, effLogoPadY, settings?.logoBgEnabled, settings?.logoBgRounded, settings?.logoBgRadius])
 
   return (
-    <div className="relative h-screen overflow-hidden p-6 text-neutral-900 dark:text-neutral-100">
+    <div className={`relative h-screen overflow-hidden text-neutral-900 dark:text-neutral-100 ${curIsAd ? '' : 'p-6'}`} style={{ backgroundColor: settings?.pageBgColor || undefined }}>
       {bgUrl && (
         <div
           className="absolute inset-0 -z-10 bg-no-repeat bg-center"
@@ -224,14 +254,53 @@ function Display() {
         />
       )}
       {/* Floating controls (auto-hide) */}
-      <div className={`fixed top-3 right-3 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto`}>
+      <div className={`fixed top-3 right-3 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto flex items-center gap-2`}>
+        <button onClick={toggleFullscreen} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
+          {isFullscreen ? (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 4.5 L4.5 4.5 L4.5 10 M14 4.5 L19.5 4.5 L19.5 10 M10 19.5 L4.5 19.5 L4.5 14 M14 19.5 L19.5 19.5 L19.5 14" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+            </svg>
+          )}
+        </button>
         <button onClick={() => setAdminOpen((v) => !v)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
           {adminOpen ? 'Close Admin' : 'Admin'}
         </button>
       </div>
 
+      {/* Info overlay (manual) */}
+      {showInfo && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center text-neutral-900 dark:text-neutral-100" onClick={()=>setShowInfo(false)}>
+          <div className="relative max-w-3xl mx-4 bg-white/95 dark:bg-neutral-900/95 border border-neutral-300 dark:border-neutral-700 rounded-lg shadow-xl p-6 text-center">
+            <img src={(settings?.themeMode||'dark')==='dark' ? '/logo_white.png' : '/logo_black.png'} alt="logo" className="absolute top-3 right-3 h-10 w-auto opacity-90" />
+            <div className="space-y-3">
+              <div className="text-sm opacity-80">Punters is an application brought to you by</div>
+              <div className="text-2xl md:text-4xl font-extrabold">Not That California Brewing Co.</div>
+              <div className="text-xs md:text-sm opacity-80">California, Scotland</div>
+              <div className="text-xs md:text-sm break-words">
+                order beers on <a href="https://www.notthatcalifornia.com" target="_blank" rel="noreferrer" className="underline">www.notthatcalifornia.com</a>
+                {' '}call <a href="tel:07972574949" className="underline">07972574949</a> or email <a href="mailto:sales@notthatcalifornia.com" className="underline">sales@notthatcalifornia.com</a>
+              </div>
+              <div className="text-[11px] opacity-70">Click anywhere to close</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Info button (bottom-right), shown with controls */}
+      <div className={`fixed bottom-3 right-3 z-40 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto`}>
+        <button onClick={()=>setShowInfo(true)} className="h-9 w-9 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/50 dark:bg-neutral-800/80 dark:hover:bg-neutral-800/90">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+            <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+          </svg>
+        </button>
+      </div>
+
       {/* Optional logo */}
-      {logoUrl && (
+  {logoUrl && !(curIsAd && (curIsFullscreen || settings?.hideLogoOnAds)) && (
         <div ref={logoRef} className={`fixed pointer-events-none ${logoPosClass}`}>
           <div style={logoContainerStyle} className="inline-block">
             <img src={logoUrl} alt="logo" style={{ width: Math.round((96 * (0.7 + (effCellScale/100)*1.5)) * (effLogoScale/100)) }} className="object-contain max-h-[20vh]" />
@@ -274,7 +343,6 @@ function Display() {
                 const imgPx = Math.round(64 * factor)
                 const titlePx = Math.round(20 * factor)
                 const subPx = Math.round(14 * factor)
-                const pricePx = Math.round(18 * factor)
                 const padY = Math.round(12 * factor)
                 return (
                 <div key={row.tapNumber} className={`flex items-center gap-4 border-b border-neutral-200/40`} style={{ paddingTop: padY, paddingBottom: padY }}>
@@ -286,39 +354,93 @@ function Display() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className={`font-bold truncate`} style={{ fontSize: titlePx }}><span className="opacity-70 mr-2">Tap {row.tapNumber}</span>{row.beer.name}</div>
+                    <div className={`font-bold truncate flex items-center gap-2`} style={{ fontSize: titlePx }}>
+                      <span className="opacity-70">{row.tapNumber} -</span>
+                      <span className="truncate">{row.beer.name}</span>
+                      {row.beer.colorHex && row.beer.colorHex !== '#00000000' && (
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" style={{ color: row.beer.colorHex }} fill="currentColor">
+                          <path d="M9 3h6l-1 17a3 3 0 0 1-3 3h-1a3 3 0 0 1-3-3L6 3h3zm7 0h2v2h-2z"/>
+                        </svg>
+                      )}
+                    </div>
                     <div className={`truncate opacity-80`} style={{ fontSize: subPx }}>{row.beer.brewery}</div>
                     <div className={`truncate opacity-80`} style={{ fontSize: subPx }}>
                       <span>{row.beer.style}</span>
                       {row.beer.abv != null && <span className="font-semibold"> • {row.beer.abv.toFixed(1)}% ABV</span>}
                     </div>
                   </div>
-                  <div className={`font-semibold whitespace-nowrap`} style={{ fontSize: pricePx }}>{formatPrice(row.beer.prices) ?? ''}</div>
+                  <div className="text-right">
+                    {(() => {
+                      const prices = (row.beer.prices || []).slice()
+                      const defId = settings?.defaultSizeId ?? null
+                      // sort by size volume descending, fallback to displayOrder
+                      prices.sort((a,b) => ((b.size?.volumeMl ?? 0) - (a.size?.volumeMl ?? 0)) || ((b.size?.displayOrder ?? 0) - (a.size?.displayOrder ?? 0)))
+                      let defIdx = defId ? prices.findIndex(p=>p.serveSizeId===defId) : -1
+                      if (defIdx === -1 && prices.length) defIdx = 0
+                      const items = prices.map((p, idx) => ({ p, isDefault: idx === defIdx }))
+                      // move default to first
+                      items.sort((a,b) => (a.isDefault === b.isDefault) ? 0 : (a.isDefault ? -1 : 1))
+                      return (
+                        <div className="flex flex-col items-end gap-0.5">
+                          {items.map(({p,isDefault},i) => (
+                            <div key={i} className={`${isDefault? 'font-semibold text-lg' : 'text-sm opacity-90'} whitespace-nowrap`}>
+                              {formatMoney(p.amountMinor, p.currency)}{p.size?.name ? ` — ${p.size.name}` : ''}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </div>
               )})}
             </div>
           )}
         </div>
+      ) : cur.type === 'ad' ? (
+        <div className="h-full w-full flex items-center justify-center" style={{ 
+          paddingTop: effLogoPosition.startsWith('top') && !(curIsFullscreen || settings?.hideLogoOnAds) ? logoBoxH : '1.5rem',
+          paddingBottom: '1.5rem',
+          paddingLeft: '1.5rem',
+          paddingRight: '1.5rem',
+        }}>
+          <img src={`${contentBase}/api/assets/${(cur.data as Ad).id}/content`} alt={cur.data.filename} className={`max-h-full max-w-full ${curIsFullscreen?'object-contain':'object-contain'}`} />
+        </div>
       ) : (
-        <div className="h-[80vh] w-full flex items-center justify-center" style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : 0 }}>
-          <img src={`${contentBase}/api/assets/${(cur.data as Ad).id}/content`} alt={cur.data.filename} className="max-h-full max-w-full object-contain" />
+        <div className="h-full w-full grid grid-cols-2 gap-4 items-center justify-center" style={{ 
+          paddingTop: effLogoPosition.startsWith('top') && !(settings?.hideLogoOnAds) ? logoBoxH : '1.5rem',
+          paddingBottom: '1.5rem',
+          paddingLeft: '1.5rem',
+          paddingRight: '1.5rem',
+        }}>
+          {(cur.data as Ad[]).map((a, i) => (
+            <div key={i} className="flex items-center justify-center">
+              <img src={`${contentBase}/api/assets/${a.id}/content`} alt={a.filename} className="max-h-full max-w-full object-contain" />
+            </div>
+          ))}
         </div>
       )}
-      {slides.length > 1 && (
+      {slides.length > 1 && (settings?.showFooter !== false) && !curIsFullscreen && (
         <div className="fixed inset-x-0 bottom-3 flex justify-center">
-          <div className="px-3 py-5 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex items-center gap-3">
-            <span>Page { (pageIdx % slides.length) + 1 } of { slides.length } • changes in {secs} seconds</span>
-            {controlsVisible && (
-              <button onClick={()=>setPaused(p=>!p)} className="ml-2 h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white" aria-label={paused? 'Play' : 'Pause'}>
-                {paused ? (
-                  // Play icon
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M8 5v14l11-7z"/></svg>
-                ) : (
-                  // Pause icon
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-                )}
-              </button>
-            )}
+          <div className="px-7 py-5 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
+            <div className="flex items-center gap-3">
+              <span>Page { (pageIdx % slides.length) + 1 } of { slides.length } • changes in {secs} seconds</span>
+              {controlsVisible && (
+                <>
+                <button onClick={()=>setPaused(p=>!p)} className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white" aria-label={paused? 'Play' : 'Pause'}>
+                  {paused ? (
+                    // Play icon
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M8 5v14l11-7z"/></svg>
+                  ) : (
+                    // Pause icon
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+                  )}
+                </button>
+                <button onClick={()=>{ setPageIdx(p=>p+1); setSecs(settings?.rotationSec ?? 90) }} className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white" aria-label="Next Page">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M7 6h2v12H7zM11 6l8 6-8 6z"/></svg>
+                </button>
+                </>
+              )}
+            </div>
             <div className="text-[10px] leading-tight opacity-80">© Not That California R&D</div>
           </div>
         </div>
@@ -411,10 +533,13 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
   const [logoBgRounded, setLogoBgRounded] = useState<boolean>((settings as any)?.logoBgRounded ?? false)
   const [logoBgRadius, setLogoBgRadius] = useState<number>((settings as any)?.logoBgRadius ?? 15)
   const [localBgOpacity, setLocalBgOpacity] = useState<number>((settings as any)?.bgOpacity ?? 100)
+  const [localPageBgColor, setLocalPageBgColor] = useState<string>((settings as any)?.pageBgColor ?? '#000000')
+  const [showFooter, setShowFooter] = useState<boolean>((settings as any)?.showFooter ?? true)
+  const [hideLogoOnAds, setHideLogoOnAds] = useState<boolean>((settings as any)?.hideLogoOnAds ?? false)
   const [localLogoPadX, setLocalLogoPadX] = useState<number>((settings as any)?.logoPadX ?? 8)
   const [localLogoPadY, setLocalLogoPadY] = useState<number>((settings as any)?.logoPadY ?? 8)
   useEffect(()=>{ if (settings) { setTheme(settings.themeMode); setLogoPreview(settings.logoAssetId?`/api/assets/${settings.logoAssetId}/content`:null); setBgPreview(settings.backgroundAssetId?`/api/assets/${settings.backgroundAssetId}/content`:null); setLocalCellScale((settings as any).cellScale ?? 50); setLocalColumnGap((settings as any).columnGap ?? 40); setLocalBeerColumns((settings as any).beerColumns ?? 1); setLocalItemsPerPage((settings as any).itemsPerPage ?? 10); setLocalLogoPosition(((settings as any).logoPosition as any) ?? 'top-center'); setLocalLogoScale((settings as any).logoScale ?? 100); setLocalBgPosition(((settings as any).bgPosition as any) ?? 'center'); setLocalBgScale((settings as any).bgScale ?? 100) } },[settings])
-  useEffect(()=>{ if (settings) { setLogoBgEnabled((settings as any).logoBgEnabled ?? false); setLogoBgColor((settings as any).logoBgColor ?? '#000000'); setLogoBgRounded((settings as any).logoBgRounded ?? false); setLogoBgRadius((settings as any).logoBgRadius ?? 15); setLocalBgOpacity((settings as any).bgOpacity ?? 100) } }, [settings])
+  useEffect(()=>{ if (settings) { setLogoBgEnabled((settings as any).logoBgEnabled ?? false); setLogoBgColor((settings as any).logoBgColor ?? '#000000'); setLogoBgRounded((settings as any).logoBgRounded ?? false); setLogoBgRadius((settings as any).logoBgRadius ?? 15); setLocalBgOpacity((settings as any).bgOpacity ?? 100); setLocalPageBgColor((settings as any).pageBgColor ?? '#000000'); setShowFooter((settings as any).showFooter ?? true); setHideLogoOnAds((settings as any).hideLogoOnAds ?? false) } }, [settings])
   useEffect(()=>{ if (settings) { setLocalLogoPadX((settings as any).logoPadX ?? 8); setLocalLogoPadY((settings as any).logoPadY ?? 8) } }, [settings])
 
   const saveTheme = async () => {
@@ -439,6 +564,9 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
       logoBgRounded,
       logoBgRadius,
       bgOpacity: localBgOpacity,
+      pageBgColor: localPageBgColor,
+      showFooter,
+      hideLogoOnAds,
       logoPadX: localLogoPadX,
       logoPadY: localLogoPadY,
       beerColumns: localBeerColumns,
@@ -454,7 +582,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => { saveTheme() }, 600)
     return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current) }
-  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localItemsPerPage, localLogoPadX, localLogoPadY])
+  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localItemsPerPage, localLogoPadX, localLogoPadY, localPageBgColor])
 
   const uploadAndSet = async (kind: 'logo'|'background', file: File) => {
     const fd = new FormData(); fd.append('file', file); fd.append('tag', kind==='logo'?'style:logo':'style:background')
@@ -499,6 +627,10 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
           <option value="light">Light</option>
         </select>
         
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={showFooter} onChange={e=>setShowFooter(e.target.checked)} /> Show bottom page counter</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={hideLogoOnAds} onChange={e=>setHideLogoOnAds(e.target.checked)} /> Hide logo on media pages</label>
       </div>
 
       <div>
@@ -577,6 +709,9 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
             <label className="flex items-center gap-2">Opacity
               <input type="range" min={0} max={100} value={localBgOpacity} onChange={e=>setLocalBgOpacity(Number(e.target.value))} />
               <span className="opacity-70">{localBgOpacity}%</span>
+            </label>
+            <label className="flex items-center gap-2">Page Background Color
+              <input type="color" value={localPageBgColor} onChange={e=>setLocalPageBgColor(e.target.value)} className="h-7 w-10 p-0 border-0 bg-transparent" />
             </label>
           </div>
         </div>
@@ -720,7 +855,7 @@ function SizesPanel({ onRefresh }: { onRefresh: () => void }) {
 
 function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void }) {
   const [beers, setBeers] = useState<Beer[]>([])
-  const [form, setForm] = useState<{ name:string; brewery:string; style:string; abv?:number; isGuest:boolean; prices: Record<number, number> }>({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{} })
+  const [form, setForm] = useState<{ name:string; brewery:string; style:string; abv?:number; isGuest:boolean; prices: Record<number, number>; colorHex?: string|null }>({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{}, colorHex: null })
   const [file, setFile] = useState<File|null>(null)
   const [editingId, setEditingId] = useState<number|null>(null)
   useEffect(()=>{ fetch('/api/beers').then(r=>r.json()).then(setBeers)},[])
@@ -728,22 +863,22 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
     let badgeAssetId: number | undefined
     if (file) { const fd=new FormData(); fd.append('file', file); const up=await fetch('/api/upload',{method:'POST',body:fd}); if(up.ok){ const a=await up.json(); badgeAssetId=a.id } }
     if (editingId==null) {
-      const res = await fetch('/api/beers', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name:form.name, brewery:form.brewery, style:form.style, abv:form.abv, isGuest:form.isGuest, prefillPrices:false, badgeAssetId }) })
+      const res = await fetch('/api/beers', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name:form.name, brewery:form.brewery, style:form.style, abv:form.abv, isGuest:form.isGuest, colorHex: form.colorHex || undefined, prefillPrices:false, badgeAssetId }) })
       if (!res.ok) { alert('Failed to create beer'); return }
       const b = await res.json(); if (!b?.id) return
       const prices = Object.entries(form.prices).map(([sid, amt]) => ({ serveSizeId:Number(sid), amountMinor: Math.round(Number(amt)*100), currency:'GBP' }))
       if (prices.length) await fetch(`/api/beers/${b.id}/prices`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prices }) })
     } else {
-      await fetch(`/api/beers/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name:form.name, brewery:form.brewery, style:form.style, abv:form.abv, isGuest:form.isGuest, ...(badgeAssetId?{badgeAssetId}:{}) }) })
+      await fetch(`/api/beers/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name:form.name, brewery:form.brewery, style:form.style, abv:form.abv, isGuest:form.isGuest, colorHex: form.colorHex || undefined, ...(badgeAssetId?{badgeAssetId}:{}) }) })
       const prices = Object.entries(form.prices).map(([sid, amt]) => ({ serveSizeId:Number(sid), amountMinor: Math.round(Number(amt)*100), currency:'GBP' }))
       if (prices.length) await fetch(`/api/beers/${editingId}/prices`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prices }) })
     }
-    setEditingId(null); setForm({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{} }); setFile(null)
+    setEditingId(null); setForm({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{}, colorHex: null }); setFile(null)
     const fresh = await fetch('/api/beers').then(r=>r.json()); setBeers(fresh); await onRefresh()
   }
   const archive = async (id:number) => { await fetch(`/api/beers/${id}`, { method:'DELETE' }); const fresh = await fetch('/api/beers').then(r=>r.json()); setBeers(fresh); await onRefresh() }
-  const openEdit = async (id:number) => { const b=await fetch(`/api/beers/${id}`).then(r=>r.json()); setEditingId(id); setForm({ name:b.name, brewery:b.brewery, style:b.style, abv:b.abv, isGuest:b.isGuest, prices:Object.fromEntries((b.prices||[]).map((p:any)=>[p.serveSizeId,(p.amountMinor||0)/100])) }); setFile(null) }
-  const cancel = () => { setEditingId(null); setForm({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{} }); setFile(null) }
+  const openEdit = async (id:number) => { const b=await fetch(`/api/beers/${id}`).then(r=>r.json()); setEditingId(id); setForm({ name:b.name, brewery:b.brewery, style:b.style, abv:b.abv, isGuest:b.isGuest, prices:Object.fromEntries((b.prices||[]).map((p:any)=>[p.serveSizeId,(p.amountMinor||0)/100])), colorHex: b.colorHex || null }); setFile(null) }
+  const cancel = () => { setEditingId(null); setForm({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{}, colorHex: null }); setFile(null) }
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div>
@@ -776,6 +911,14 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
                 <input type="number" step="0.01" placeholder="£" value={form.prices[s.id] ? String(form.prices[s.id]) : ''} onChange={e => setForm({...form, prices: { ...form.prices, [s.id]: Number(e.target.value || 0) }})} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
               </div>
             ))}
+          </div>
+          <div className="border rounded p-2 border-neutral-300 dark:border-neutral-800">
+            <div className="font-semibold mb-1">Beer Colour (for icon)</div>
+            <div className="flex items-center gap-3">
+              <input type="color" value={form.colorHex || '#000000'} onChange={e=>setForm({...form, colorHex: e.target.value})} className="h-7 w-10 p-0 border-0 bg-transparent" />
+              <button onClick={()=>setForm({...form, colorHex: null})} className="px-2 py-1 rounded bg-neutral-700 text-white">Clear (transparent)</button>
+            </div>
+            <div className="text-xs opacity-70 mt-1">If transparent, the beer icon is hidden.</div>
           </div>
           <div className="border rounded p-2 border-neutral-300 dark:border-neutral-800">
             <div className="font-semibold mb-1">Badge Image {editingId==null?'(optional)':'(replace optional)'}</div>
@@ -871,6 +1014,12 @@ function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
     const list = await fetch('/api/assets').then(r=>r.json()); setAssets(list); await onRefresh()
   }
   const remove = async (id:number) => { await fetch(`/api/assets/${id}`, { method:'DELETE' }); const list = await fetch('/api/assets').then(r=>r.json()); setAssets(list); await onRefresh() }
+  const update = async (a: Ad, patch: Partial<Ad>) => {
+    const res = await fetch(`/api/assets/${a.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ allowPair: patch.allowPair, fullscreen: patch.fullscreen }) })
+    if (res.ok) {
+      const list = await fetch('/api/assets').then(r=>r.json()); setAssets(list); await onRefresh()
+    }
+  }
   return (
     <div className="space-y-6">
       <div>
@@ -884,6 +1033,10 @@ function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
             <div className="flex items-center justify-between text-xs mt-1">
               <span className="truncate" title={a.filename}>{a.filename}</span>
               <LoadingButton onClick={()=>remove(a.id)} className="px-2 py-0.5 rounded bg-red-600 text-white">Delete</LoadingButton>
+            </div>
+            <div className="mt-2 text-xs space-y-1">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={a.allowPair !== false} onChange={e=>update(a, { allowPair: e.target.checked })} /> Allow pairing</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={!!a.fullscreen} onChange={e=>update(a, { fullscreen: e.target.checked })} /> Fullscreen (hide logo/footer)</label>
             </div>
           </div>
         ))}

@@ -31,6 +31,9 @@ const SettingsSchema = z.object({
   bgOpacity: z.coerce.number().int().min(0).max(100).optional(),
   logoPadX: z.coerce.number().int().min(0).max(200).optional(),
   logoPadY: z.coerce.number().int().min(0).max(200).optional(),
+  pageBgColor: z.string().min(1).max(20).optional(),
+  showFooter: z.coerce.boolean().optional(),
+  hideLogoOnAds: z.coerce.boolean().optional(),
   beerColumns: z.coerce.number().int().min(1).max(6).optional(),
   itemsPerPage: z.coerce.number().int().min(1).max(500).optional(),
 }).partial()

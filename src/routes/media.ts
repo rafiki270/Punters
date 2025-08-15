@@ -20,6 +20,20 @@ export async function registerMediaRoutes(app: FastifyInstance) {
     })
   })
 
+  app.put('/api/assets/:id', { preHandler: requireAdmin }, async (req, reply) => {
+    const id = Number((req.params as any).id)
+    const body = (req as any).body as { allowPair?: boolean; fullscreen?: boolean }
+    try {
+      const updated = await prisma.asset.update({ where: { id }, data: {
+        allowPair: body.allowPair ?? undefined,
+        fullscreen: body.fullscreen ?? undefined,
+      } })
+      return updated
+    } catch {
+      return reply.code(404).send({ error: 'Not found' })
+    }
+  })
+
   app.post('/api/upload', { preHandler: requireAdmin }, async (req, reply) => {
     const mp = await (req as any).file()
     if (!mp) return reply.code(400).send({ error: 'No file' })

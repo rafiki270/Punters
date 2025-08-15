@@ -67,6 +67,7 @@ export async function registerTapRoutes(app: FastifyInstance) {
             abv: t.beer.abv,
             badgeAssetId: t.beer.badgeAssetId,
             isGuest: t.beer.isGuest,
+            colorHex: (t.beer as any).colorHex,
             prices: t.beer.prices
           }
         : null

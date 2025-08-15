@@ -37,6 +37,9 @@ model GlobalSettings {
   bgOpacity          Int      @default(100)  // 0..100 percent
   logoPadX           Int      @default(8)
   logoPadY           Int      @default(8)
+  pageBgColor        String   @default("#000000")
+  showFooter         Boolean  @default(true)
+  hideLogoOnAds      Boolean  @default(false)
   beerColumns        Int      @default(1)
   itemsPerPage       Int      @default(10)
   updatedAt          DateTime @updatedAt
@@ -142,6 +145,8 @@ model Asset {
   sizeBytes Int
   data      Bytes?
   tags      String?
+  allowPair Boolean  @default(true)
+  fullscreen Boolean @default(false)
   createdAt DateTime @default(now())
   beersWithBadge Beer[] @relation("BadgeAsset")
   globalLogo GlobalSettings[] @relation("LogoAsset")
