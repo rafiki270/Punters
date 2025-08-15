@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../db'
 import { z } from 'zod'
 import { requireAdmin } from '../auth'
+import { emitChange } from '../events'
 
 const BeerCreate = z.object({
   name: z.string().min(1),
@@ -67,6 +68,7 @@ export async function registerBeerRoutes(app: FastifyInstance) {
       }
     }
 
+    emitChange('beers')
     return beer
   })
 
@@ -75,6 +77,7 @@ export async function registerBeerRoutes(app: FastifyInstance) {
     const data = BeerUpdate.parse((req as any).body)
     try {
       const updated = await prisma.beer.update({ where: { id }, data })
+      emitChange('beers')
       return updated
     } catch (e) {
       return reply.code(404).send({ error: 'Not found' })
@@ -85,6 +88,7 @@ export async function registerBeerRoutes(app: FastifyInstance) {
     const id = Number((req.params as any).id)
     try {
       await prisma.beer.update({ where: { id }, data: { active: false } })
+      emitChange('beers')
       return { ok: true }
     } catch {
       return reply.code(404).send({ error: 'Not found' })
@@ -114,6 +118,7 @@ export async function registerBeerRoutes(app: FastifyInstance) {
         })
       )
     )
+    emitChange('beers')
     return { ok: true }
   })
 }

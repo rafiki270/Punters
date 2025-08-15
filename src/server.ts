@@ -14,10 +14,12 @@ import { registerDeviceRoutes } from './routes/devices';
 import { registerAuthRoutes } from './auth';
 import { registerAdminRoutes } from './routes/admin';
 import { registerDisplayRoutes } from './routes/display';
+import { onChange } from './events';
 import { startDiscovery, getDiscovered } from './discovery';
 import { prisma } from './db';
 import cookie from '@fastify/cookie';
 import fs from 'node:fs';
+import { readdirSync } from 'node:fs';
 
 const isProd = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT || 3000);
@@ -61,6 +63,21 @@ async function buildServer() {
   }
   await registerDisplayRoutes(app);
 
+  // List background images from web/public/bcg
+  app.get('/api/backgrounds', async () => {
+    try {
+      const dir = path.join(process.cwd(), 'web', 'public', 'bcg');
+      const files = readdirSync(dir, { withFileTypes: true })
+        .filter((d: any) => d.isFile())
+        .map((d: any) => d.name)
+        .filter((n: string) => /\.(png|jpg|jpeg|gif|webp)$/i.test(n))
+        .sort((a: string,b: string)=> a.localeCompare(b));
+      return files.map((f: string) => ({ path: `/bcg/${encodeURIComponent(f)}`, name: f }));
+    } catch {
+      return [] as Array<{ path: string; name: string }>;
+    }
+  });
+
   // Static: serve built web app if present
   const webDist = path.join(process.cwd(), 'web', 'dist');
   if (fs.existsSync(webDist)) {
@@ -90,6 +107,11 @@ async function buildServer() {
   io.on('connection', (socket) => {
     app.log.info({ id: socket.id }, 'socket connected');
     socket.on('disconnect', () => app.log.info({ id: socket.id }, 'socket disconnected'));
+  });
+
+  // Bridge internal change events to clients
+  onChange((p) => {
+    io.emit('changed', p);
   });
 
   // Tick broadcaster

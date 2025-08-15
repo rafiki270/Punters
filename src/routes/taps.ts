@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../db'
 import { z } from 'zod'
 import { requireAdmin } from '../auth'
+import { emitChange } from '../events'
 
 const AssignPayload = z.object({
   beerId: z.number().int().optional(),
@@ -90,6 +91,7 @@ export async function registerTapRoutes(app: FastifyInstance) {
       await prisma.tap.delete({ where: { number: t.number } })
     }
     const taps = await prisma.tap.findMany({ orderBy: { number: 'asc' } })
+    emitChange('taps')
     return { count, taps }
   })
 
@@ -128,6 +130,7 @@ export async function registerTapRoutes(app: FastifyInstance) {
       }
     }
 
+    emitChange('taps')
     return { ok: true }
   })
 
@@ -142,6 +145,7 @@ export async function registerTapRoutes(app: FastifyInstance) {
       if (latest) await prisma.tapAssignment.update({ where: { id: latest.id }, data: { removedAt: new Date(), removedReason: 'cleared' } })
     }
     await prisma.tap.update({ where: { number }, data: { beerId: null } })
+    emitChange('taps')
     return { ok: true }
   })
 
@@ -155,6 +159,7 @@ export async function registerTapRoutes(app: FastifyInstance) {
       const latest = await prisma.tapAssignment.findFirst({ where: { tapNumber: number, removedAt: null }, orderBy: { assignedAt: 'desc' } })
       if (latest) await prisma.tapAssignment.update({ where: { id: latest.id }, data: { removedAt: new Date(), removedReason: 'kicked' } })
     }
+    emitChange('taps')
     return { ok: true }
   })
 

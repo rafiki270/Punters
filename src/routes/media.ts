@@ -3,6 +3,7 @@ import { ImageInfo } from 'image-size'
 import { imageSize } from 'image-size'
 import { prisma } from '../db'
 import { requireAdmin } from '../auth'
+import { emitChange } from '../events'
 
 export async function registerMediaRoutes(app: FastifyInstance) {
   app.get('/api/assets', async () => {
@@ -33,6 +34,7 @@ export async function registerMediaRoutes(app: FastifyInstance) {
         requireLogo: body.requireLogo ?? undefined,
         displayOrder: typeof body.displayOrder === 'number' ? Number(body.displayOrder) : undefined,
       } })
+      emitChange('media')
       return updated
     } catch {
       return reply.code(404).send({ error: 'Not found' })
@@ -44,6 +46,7 @@ export async function registerMediaRoutes(app: FastifyInstance) {
     for (let i = 0; i < ids.length; i++) {
       await prisma.asset.update({ where: { id: Number(ids[i]) }, data: { displayOrder: i } })
     }
+    emitChange('media')
     return { ok: true }
   })
 
@@ -73,9 +76,11 @@ export async function registerMediaRoutes(app: FastifyInstance) {
         height: typeof dims?.height === 'number' ? (dims!.height as number) : null as any,
         sizeBytes: buf.length,
         data: buf,
-        tags: tag
+        tags: tag,
+        fullscreen: true
       }
     })
+    emitChange('media')
     return asset
   })
 
@@ -87,6 +92,7 @@ export async function registerMediaRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Asset is used by a beer badge and cannot be deleted from Media.' })
     }
     await prisma.asset.delete({ where: { id } }).catch(() => {})
+    emitChange('media')
     return { ok: true }
   })
 

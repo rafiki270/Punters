@@ -22,6 +22,7 @@ model GlobalSettings {
   backgroundAssetId  Int?
   logoAsset          Asset?   @relation("LogoAsset", fields: [logoAssetId], references: [id])
   backgroundAsset    Asset?   @relation("BackgroundAsset", fields: [backgroundAssetId], references: [id])
+  backgroundPreset   String?
   // Style defaults (clients inherit unless overridden)
   cellScale          Int      @default(50)   // 0..100
   columnGap          Int      @default(40)   // px

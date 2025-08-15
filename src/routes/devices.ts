@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../db'
 import { z } from 'zod'
 import { requireAdmin } from '../auth'
+import { emitChange } from '../events'
 
 const DeviceCreate = z.object({
   name: z.string().min(1),
@@ -27,18 +28,23 @@ export async function registerDeviceRoutes(app: FastifyInstance) {
 
   app.post('/api/devices', { preHandler: requireAdmin }, async (req) => {
     const data = DeviceCreate.parse((req as any).body)
-    return prisma.device.create({ data })
+    const created = await prisma.device.create({ data })
+    emitChange('devices')
+    return created
   })
 
   app.put('/api/devices/:id', { preHandler: requireAdmin }, async (req) => {
     const id = Number((req.params as any).id)
     const data = DeviceUpdate.parse((req as any).body)
-    return prisma.device.update({ where: { id }, data })
+    const updated = await prisma.device.update({ where: { id }, data })
+    emitChange('devices')
+    return updated
   })
 
   app.delete('/api/devices/:id', { preHandler: requireAdmin }, async (req) => {
     const id = Number((req.params as any).id)
     await prisma.device.delete({ where: { id } })
+    emitChange('devices')
     return { ok: true }
   })
 }

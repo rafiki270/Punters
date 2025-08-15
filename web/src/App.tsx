@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
+import { io, Socket } from 'socket.io-client'
 
-type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean; hideLogoOnAds?: boolean }
+type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean }
 type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number; volumeMl?: number } }
 type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[]; colorHex?: string|null }
 type TapBeer = { tapNumber: number; status: string; beer: Beer|null }
@@ -147,6 +148,17 @@ function Display() {
 
   useEffect(() => { loadAll() }, [])
 
+  // Live updates: listen for server change events and reload
+  useEffect(() => {
+    let url: string | undefined = undefined
+    if (mode === 'client' && remoteBase) url = remoteBase
+    const sock: Socket = io(url, { transports: ['websocket'], reconnection: true })
+    const onChanged = () => { loadAll() }
+    sock.on('changed', onChanged)
+    return () => { try { sock.off('changed', onChanged); sock.close() } catch {} }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, remoteBase])
+
   useEffect(() => {
     const dur = settings?.rotationSec ?? 90
     setSecs(dur)
@@ -211,7 +223,7 @@ function Display() {
   const footPadPx = ((settings?.showFooter !== false) && !curIsFullscreen) ? 96 : 24
 
   const contentBase = (mode==='client' && remoteBase) ? remoteBase : ''
-  const bgUrl = settings?.backgroundAssetId ? `${contentBase}/api/assets/${settings.backgroundAssetId}/content` : null
+  const bgUrl = settings?.backgroundPreset ? settings.backgroundPreset : (settings?.backgroundAssetId ? `${contentBase}/api/assets/${settings.backgroundAssetId}/content` : null)
   const logoUrl = settings?.logoAssetId ? `${contentBase}/api/assets/${settings.logoAssetId}/content` : null
   const effCellScale = (device?.cellScale ?? settings?.cellScale ?? 50)
   const effColumnGap = (device?.columnGap ?? settings?.columnGap ?? 40)
@@ -230,11 +242,14 @@ function Display() {
     ? 'top-3 left-1/2 -translate-x-1/2'
     : `${effLogoPosition.includes('top') ? 'top-3' : 'bottom-3'} ${effLogoPosition.includes('left') ? 'left-3' : 'right-3'}`
 
-  const logoContainerStyle: React.CSSProperties | undefined = settings?.logoBgEnabled ? {
-    backgroundColor: settings.logoBgColor || '#000000',
-    borderRadius: (settings.logoBgRounded ? (settings.logoBgRadius ?? 15) : 0),
+  // Always apply padding around the logo; background color/rounded only when enabled
+  const logoContainerStyle: React.CSSProperties = {
     padding: `${effLogoPadY}px ${effLogoPadX}px`,
-  } : undefined
+    ...(settings?.logoBgEnabled ? {
+      backgroundColor: settings.logoBgColor || '#000000',
+      borderRadius: (settings.logoBgRounded ? (settings.logoBgRadius ?? 15) : 0),
+    } : {}),
+  }
 
   // Measure logo to add top padding when logo is at top
   const logoRef = useRef<HTMLDivElement | null>(null)
@@ -246,10 +261,16 @@ function Display() {
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
-  }, [logoUrl, effLogoScale, effCellScale, effLogoPosition, effLogoPadX, effLogoPadY, settings?.logoBgEnabled, settings?.logoBgRounded, settings?.logoBgRadius])
+  }, [logoUrl, effLogoScale, effLogoPosition, effLogoPadX, effLogoPadY, settings?.logoBgEnabled, settings?.logoBgRounded, settings?.logoBgRadius])
 
   return (
-    <div className={`relative h-screen overflow-hidden text-neutral-900 dark:text-neutral-100 ${curIsAd ? '' : 'p-6'}`} style={{ backgroundColor: settings?.pageBgColor || undefined }}>
+    <div className={`relative h-screen overflow-hidden text-neutral-900 dark:text-neutral-100 ${curIsAd ? '' : 'p-6'}`}>
+      {/* Background color layer */}
+      <div
+        className="absolute inset-0 -z-20"
+        style={{ backgroundColor: settings?.pageBgColor || undefined }}
+      />
+      {/* Background image layer */}
       {bgUrl && (
         <div
           className="absolute inset-0 -z-10 bg-no-repeat bg-center"
@@ -318,10 +339,18 @@ function Display() {
       </div>
 
       {/* Optional logo */}
-  {logoUrl && !(curIsAd && (curIsFullscreen || settings?.hideLogoOnAds)) && (
+  {(() => {
+        const adObj: Ad | null = cur.type === 'ad' ? (cur.data as Ad) : null
+        const showLogo = !!logoUrl && (
+          !curIsAd ? true : (
+            curIsFullscreen ? (adObj?.requireLogo === true) : true
+          )
+        )
+        return showLogo
+      })() && (
         <div ref={logoRef} className={`fixed pointer-events-none ${logoPosClass}`}>
           <div style={logoContainerStyle} className="inline-block">
-            <img src={logoUrl} alt="logo" style={{ width: Math.round((96 * (0.7 + (effCellScale/100)*1.5)) * (effLogoScale/100)) }} className="object-contain max-h-[20vh]" />
+            <img src={logoUrl} alt="logo" style={{ width: Math.round(96 * (effLogoScale/100)) }} className="object-contain max-h-[20vh]" />
           </div>
         </div>
       )}
@@ -377,11 +406,11 @@ function Display() {
                       <span className="opacity-70">{row.tapNumber} -</span>
                       <span className="truncate">{row.beer.name}</span>
                       {row.beer.colorHex && row.beer.colorHex !== '#00000000' && (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 512 512">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 512 512">
                           <title>Simple Pint Glass Icon</title>
                           {/* Glass outline */}
                           <path d="M128 64 h256 l-32 384 H160 L128 64 z"
-                                fill="none" stroke="#000" stroke-width="16" stroke-linejoin="round"/>
+                                fill="none" stroke="#000" strokeWidth={16} strokeLinejoin="round"/>
 
                           {/* Beer fill (change this colour programmatically) */}
                           <path id="beer-fill" d="M144 80 h224 l-28 352 H172 L144 80 z"
@@ -399,10 +428,10 @@ function Display() {
                                        v16
                                        h-256
                                        v-16 z"
-                                fill="#FFFFFF" stroke="#000" stroke-width="16" stroke-linejoin="round"/>
+                                fill="#FFFFFF" stroke="#000" strokeWidth={16} strokeLinejoin="round"/>
 
                           {/* Base */}
-                          <rect x="160" y="448" width="192" height="16" fill="#FFFFFF" stroke="#000" stroke-width="8"/>
+                          <rect x="160" y="448" width="192" height="16" fill="#FFFFFF" stroke="#000" strokeWidth={8}/>
                         </svg>
                       )}
                     </div>
@@ -441,12 +470,19 @@ function Display() {
         </div>
       ) : cur.type === 'ad' ? (
         <div className="h-full w-full flex items-center justify-center" style={{ 
-          paddingTop: effLogoPosition.startsWith('top') && !curIsFullscreen ? logoBoxH : '1.5rem',
-          paddingBottom: footPadPx,
-          paddingLeft: '1.5rem',
-          paddingRight: '1.5rem',
+          paddingTop: curIsFullscreen ? 0 : (effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem'),
+          paddingBottom: curIsFullscreen ? 0 : footPadPx,
+          paddingLeft: curIsFullscreen ? 0 : '1.5rem',
+          paddingRight: curIsFullscreen ? 0 : '1.5rem',
         }}>
-          <img src={`${contentBase}/api/assets/${(cur.data as Ad).id}/content`} alt={cur.data.filename} className={`max-h-full max-w-full ${curIsFullscreen?'object-contain':'object-contain'}`} />
+          {(() => {
+            const ad = cur.data as Ad
+            const isPortrait = Number(ad.height || 0) > Number(ad.width || 0)
+            const cls = curIsFullscreen
+              ? (isPortrait ? 'h-full w-full object-contain' : 'h-full w-full object-cover')
+              : 'max-h-full max-w-full object-contain'
+            return <img src={`${contentBase}/api/assets/${ad.id}/content`} alt={ad.filename} className={cls} />
+          })()}
         </div>
       ) : (
         <div className="h-full w-full grid grid-cols-2 gap-4 items-center justify-center" style={{ 
@@ -477,6 +513,9 @@ function Display() {
 }
 
 export default function App() {
+  // Route: standalone admin on /admin
+  const path = typeof window !== 'undefined' ? window.location.pathname : '/'
+  if (path.startsWith('/admin')) return <AdminPage />
   // Default to display view; admin is an overlay toggle within Display
   return <Display />
 }
@@ -494,7 +533,16 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
       { key: 'media', label: 'Media' },
     ] as any : [])
   ]
-  const [tab, setTab] = useState<string>('settings')
+  // Persist last-opened tab per session
+  const [tab, setTab] = useState<string>(() => {
+    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('adminLastTab') : null
+    // If in client mode, force Settings
+    if ((mode !== 'server') && saved && saved !== 'settings') return 'settings'
+    return saved || 'settings'
+  })
+  useEffect(() => {
+    try { sessionStorage.setItem('adminLastTab', tab) } catch {}
+  }, [tab])
   useEffect(()=>{ if (uiMode !== 'server' && tab !== 'settings') setTab('settings') }, [uiMode, tab])
 
   const [shouldRender, setShouldRender] = useState(isOpen);
@@ -534,6 +582,74 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
   )
 }
 
+// Standalone full-page Admin view (for /admin)
+function AdminPage() {
+  const [uiMode, setUiMode] = useState<'server'|'client'>('server')
+  const [sizes, setSizes] = useState<Size[]>([])
+  const [settings, setSettings] = useState<Settings | null>(null)
+  const [servers, setServers] = useState<Discovered[]>([])
+  const [remoteBase, setRemoteBase] = useState<string | null>(null)
+  const [localDisplayMode, setLocalDisplayMode] = useState<'all'|'beer'|'ads'>(()=> (localStorage.getItem('localDisplayMode') as any) || 'all')
+
+  const [tab, setTab] = useState<string>(() => {
+    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('adminLastTab') : null
+    return saved || 'settings'
+  })
+  useEffect(() => { try { sessionStorage.setItem('adminLastTab', tab) } catch {} }, [tab])
+  useEffect(()=>{ if (uiMode !== 'server' && tab !== 'settings') setTab('settings') }, [uiMode, tab])
+
+  async function loadAll() {
+    try {
+      const m = await fetch('/api/mode').then(r=>r.json()).catch(()=>({mode:'server'}))
+      const modeNow: 'server'|'client' = m.mode === 'client' ? 'client' : 'server'
+      setUiMode(modeNow)
+      if (modeNow === 'client') {
+        const list = await fetch('/api/discovery/servers').then(r=>r.json()).catch(()=>[])
+        setServers(list)
+        const saved = localStorage.getItem('remoteServer')
+        if (saved) setRemoteBase(saved)
+      }
+      const base = (modeNow === 'client' && (localStorage.getItem('remoteServer'))) ? localStorage.getItem('remoteServer')! : ''
+      const [s, sz] = await Promise.all([
+        fetch(`${base}/api/settings`).then(r=>r.json()),
+        fetch(`${base}/api/sizes`).then(r=>r.json()).catch(()=>[]),
+      ])
+      setSettings(s)
+      setSizes(sz)
+    } catch {}
+  }
+  useEffect(() => { loadAll() }, [])
+
+  const tabs: Array<{key: string; label: string}> = [
+    { key: 'settings', label: 'Settings' },
+    ...(uiMode==='server' ? [
+      { key: 'style', label: 'Style' },
+      { key: 'sizes', label: 'Sizes' },
+      { key: 'beers', label: 'Beers' },
+      { key: 'taps', label: 'Taps' },
+      { key: 'media', label: 'Media' },
+    ] as any : [])
+  ]
+
+  return (
+    <div className="min-h-screen p-4 max-w-5xl mx-auto text-neutral-900 dark:text-neutral-100">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex gap-2 text-sm">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)} className={`px-3 py-1.5 rounded border ${tab===t.key?'bg-neutral-100 border-neutral-300 dark:bg-neutral-800 dark:border-neutral-600':'bg-neutral-100/60 dark:bg-neutral-800/40 border-transparent'}`}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+      {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={loadAll} localDisplayMode={localDisplayMode} setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }} servers={servers} remoteBase={remoteBase} onSelectServer={(url)=>{ localStorage.setItem('remoteServer', url); setRemoteBase(url); loadAll() }} onLocalModeChange={(m)=>{ setUiMode(m) }} />}
+      {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={loadAll} />}
+      {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={loadAll} />}
+      {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={loadAll} />}
+      {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={loadAll} />}
+      {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={loadAll} />}
+    </div>
+  )
+}
+
 function ServerPanel({ servers, remoteBase, onSelectServer }: { servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void }) {
   const [sel, setSel] = useState<string>(remoteBase || '')
   const [manual, setManual] = useState<string>(remoteBase || '')
@@ -569,6 +685,8 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
   const [localLogoScale, setLocalLogoScale] = useState<number>((settings as any)?.logoScale ?? 100)
   const [localBgPosition, setLocalBgPosition] = useState<'center'|'top'|'bottom'|'left'|'right'>(((settings as any)?.bgPosition as any) ?? 'center')
   const [localBgScale, setLocalBgScale] = useState<number>((settings as any)?.bgScale ?? 100)
+  const [bgPresets, setBgPresets] = useState<Array<{path:string; name:string}>>([])
+  const [bgPresetSel, setBgPresetSel] = useState<string>('custom')
   const [logoBgEnabled, setLogoBgEnabled] = useState<boolean>((settings as any)?.logoBgEnabled ?? false)
   const [logoBgColor, setLogoBgColor] = useState<string>((settings as any)?.logoBgColor ?? '#000000')
   const [logoBgRounded, setLogoBgRounded] = useState<boolean>((settings as any)?.logoBgRounded ?? false)
@@ -578,8 +696,9 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
   const [showFooter, setShowFooter] = useState<boolean>((settings as any)?.showFooter ?? true)
   const [localLogoPadX, setLocalLogoPadX] = useState<number>((settings as any)?.logoPadX ?? 8)
   const [localLogoPadY, setLocalLogoPadY] = useState<number>((settings as any)?.logoPadY ?? 8)
-  useEffect(()=>{ if (settings) { setTheme(settings.themeMode); setLogoPreview(settings.logoAssetId?`/api/assets/${settings.logoAssetId}/content`:null); setBgPreview(settings.backgroundAssetId?`/api/assets/${settings.backgroundAssetId}/content`:null); setLocalCellScale((settings as any).cellScale ?? 50); setLocalColumnGap((settings as any).columnGap ?? 40); setLocalBeerColumns((settings as any).beerColumns ?? 1); setLocalItemsPerPage((settings as any).itemsPerPage ?? 10); setLocalLogoPosition(((settings as any).logoPosition as any) ?? 'top-center'); setLocalLogoScale((settings as any).logoScale ?? 100); setLocalBgPosition(((settings as any).bgPosition as any) ?? 'center'); setLocalBgScale((settings as any).bgScale ?? 100) } },[settings])
+  useEffect(()=>{ if (settings) { setTheme(settings.themeMode); setLogoPreview(settings.logoAssetId?`/api/assets/${settings.logoAssetId}/content`:null); setBgPreview(settings.backgroundAssetId?`/api/assets/${settings.backgroundAssetId}/content`:null); setLocalCellScale((settings as any).cellScale ?? 50); setLocalColumnGap((settings as any).columnGap ?? 40); setLocalBeerColumns((settings as any).beerColumns ?? 1); setLocalItemsPerPage((settings as any).itemsPerPage ?? 10); setLocalLogoPosition(((settings as any).logoPosition as any) ?? 'top-center'); setLocalLogoScale((settings as any).logoScale ?? 100); setLocalBgPosition(((settings as any).bgPosition as any) ?? 'center'); setLocalBgScale((settings as any).bgScale ?? 100); setBgPresetSel(((settings as any)?.backgroundPreset as string) ?? 'custom') } },[settings])
   useEffect(()=>{ if (settings) { setLogoBgEnabled((settings as any).logoBgEnabled ?? false); setLogoBgColor((settings as any).logoBgColor ?? '#000000'); setLogoBgRounded((settings as any).logoBgRounded ?? false); setLogoBgRadius((settings as any).logoBgRadius ?? 15); setLocalBgOpacity((settings as any).bgOpacity ?? 100); setLocalPageBgColor((settings as any).pageBgColor ?? '#000000'); setShowFooter((settings as any).showFooter ?? true) } }, [settings])
+  useEffect(()=>{ fetch('/api/backgrounds').then(r=>r.json()).then(setBgPresets).catch(()=>setBgPresets([])) }, [])
   useEffect(()=>{ if (settings) { setLocalLogoPadX((settings as any).logoPadX ?? 8); setLocalLogoPadY((settings as any).logoPadY ?? 8) } }, [settings])
 
   const saveTheme = async () => {
@@ -592,6 +711,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
       locale: settings?.locale ?? 'en-GB',
       logoAssetId: settings?.logoAssetId ?? null,
       backgroundAssetId: settings?.backgroundAssetId ?? null,
+      backgroundPreset: bgPresetSel==='custom' ? null : bgPresetSel,
       // style defaults
       cellScale: localCellScale,
       columnGap: localColumnGap,
@@ -621,7 +741,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => { saveTheme() }, 600)
     return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current) }
-  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localItemsPerPage, localLogoPadX, localLogoPadY, localPageBgColor])
+  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localItemsPerPage, localLogoPadX, localLogoPadY, localPageBgColor, bgPresetSel, showFooter])
 
   const uploadAndSet = async (kind: 'logo'|'background', file: File) => {
     const fd = new FormData(); fd.append('file', file); fd.append('tag', kind==='logo'?'style:logo':'style:background')
@@ -639,6 +759,10 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
       backgroundAssetId: kind==='background' ? asset.id : (settings?.backgroundAssetId ?? null),
     }
     await fetch('/api/settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    if (kind==='background') {
+      setBgPresetSel('custom')
+      setBgPreview(`/api/assets/${asset.id}/content`)
+    }
     await onRefresh()
   }
 
@@ -728,10 +852,27 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
         </div>
         <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
           <div className="font-semibold mb-1">Background</div>
-          {bgPreview ? (
+          <div className="mb-2">
+            <label className="block text-sm mb-1">Background Preset</label>
+            <select value={bgPresetSel} onChange={e=>setBgPresetSel(e.target.value)} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
+              <option value="custom">Custom</option>
+              {bgPresets.map(p => {
+                const label = p.name
+                  .replace(/\.[^.]+$/, '')
+                  .replace(/[-_]+/g, ' ')
+                  .replace(/^./, (c) => c.toUpperCase());
+                return <option key={p.path} value={p.path}>{label}</option>
+              })}
+            </select>
+          </div>
+          {bgPresetSel !== "custom" ? (
+            <div className="mb-2"><img src={bgPresetSel} alt="background" className="h-24 object-cover w-full" /></div>
+          ) : (bgPreview ? (
             <div className="mb-2"><img src={bgPreview} alt="background" className="h-24 object-cover w-full" /></div>
-          ) : <div className="mb-2 text-xs opacity-60">No background set</div>}
+          ) : <div className="mb-2 text-xs opacity-60">No background set</div>)}
+          {bgPresetSel==='custom' && (
           <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadAndSet('background', f).finally(()=>{ (e.target as HTMLInputElement).value='' }) }} className="block w-full text-sm text-neutral-900 dark:text-neutral-100 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-neutral-700 dark:hover:file:bg-neutral-600" />
+          )}
           {settings?.backgroundAssetId && <button onClick={()=>clearImage('background')} className="ml-2 text-sm px-2 py-1 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Clear</button>}
           <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
             <label className="flex items-center gap-2">Position
@@ -1233,3 +1374,6 @@ function DevicesPanel({ onRefresh }: { onRefresh: () => void }) {
     </div>
   )
 }
+
+  // Fetch background presets (StylePanel scope)
+  // Note: runs once when StylePanel mounts

@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify'
 import { prisma } from '../db'
 import { z } from 'zod'
 import { requireAdmin } from '../auth'
+import { emitChange } from '../events'
 
 // Accept partial updates and coerce numeric inputs from strings
 const SettingsSchema = z.object({
@@ -16,6 +17,7 @@ const SettingsSchema = z.object({
   mode: z.enum(['server','client']).optional(),
   logoAssetId: z.coerce.number().int().nullable().optional(),
   backgroundAssetId: z.coerce.number().int().nullable().optional(),
+  backgroundPreset: z.string().min(1).max(200).nullable().optional(),
   // Style defaults
   cellScale: z.coerce.number().int().min(0).max(100).optional(),
   columnGap: z.coerce.number().int().min(0).max(200).optional(),
@@ -33,7 +35,6 @@ const SettingsSchema = z.object({
   logoPadY: z.coerce.number().int().min(0).max(200).optional(),
   pageBgColor: z.string().min(1).max(20).optional(),
   showFooter: z.coerce.boolean().optional(),
-  hideLogoOnAds: z.coerce.boolean().optional(),
   beerColumns: z.coerce.number().int().min(1).max(6).optional(),
   itemsPerPage: z.coerce.number().int().min(1).max(500).optional(),
 }).partial()
@@ -62,14 +63,16 @@ export async function registerSettingsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid settings', details: parsedRes.error.flatten() })
     }
     const parsed = parsedRes.data as any
-    const { defaultPrices, defaultGuestPrices, logoAssetId, backgroundAssetId, ...rest } = parsed
+    const { defaultPrices, defaultGuestPrices, logoAssetId, backgroundAssetId, backgroundPreset, ...rest } = parsed
     // Build nested writes for relations and merge scalar defaults
     const updateData: any = { ...rest }
     if (logoAssetId !== undefined) updateData.logoAsset = logoAssetId == null ? { disconnect: true } : { connect: { id: Number(logoAssetId) } }
     if (backgroundAssetId !== undefined) updateData.backgroundAsset = backgroundAssetId == null ? { disconnect: true } : { connect: { id: Number(backgroundAssetId) } }
+    if (backgroundPreset !== undefined) updateData.backgroundPreset = backgroundPreset
     const createData: any = { id: 1, ...rest }
     if (logoAssetId !== undefined && logoAssetId != null) createData.logoAsset = { connect: { id: Number(logoAssetId) } }
     if (backgroundAssetId !== undefined && backgroundAssetId != null) createData.backgroundAsset = { connect: { id: Number(backgroundAssetId) } }
+    if (backgroundPreset !== undefined) createData.backgroundPreset = backgroundPreset
     const updated = await prisma.globalSettings.upsert({ where: { id: 1 }, update: updateData, create: createData })
     // Upsert defaults if provided
     if (defaultPrices) {
@@ -90,6 +93,7 @@ export async function registerSettingsRoutes(app: FastifyInstance) {
       const { setMode } = await import('../discovery')
       setMode(parsed.mode)
     }
+    emitChange('settings')
     return reply.send(updated)
   })
 }
