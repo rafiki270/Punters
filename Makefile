@@ -22,12 +22,12 @@ docker-toggle: ## Toggle stack on host port 80 (start if stopped, stop if runnin
 	fi
 
 # Build and push multi-arch 'latest' image to GHCR and Docker Hub locally (requires buildx + logins)
-docker-publish-latest: ## Buildx push latest to GHCR + Docker Hub
+docker-publish-latest: ## Buildx push latest to GHCR + Docker Hub (amd64, arm64)
 	@docker buildx version >/dev/null 2>&1 || { echo "docker buildx not available"; exit 1; }
 	@echo "Ensure you're logged in: ghcr.io (with GHCR_TOKEN) and Docker Hub (DOCKERHUB)";
 	docker buildx create --name puntersbx --use >/dev/null 2>&1 || true
 	docker buildx build \
-	  --platform linux/amd64,linux/arm64,linux/arm/v7 \
+	  --platform linux/amd64,linux/arm64 \
 	  -t ghcr.io/rafiki270/punters:latest \
 	  -t docker.io/rafiki270/punters:latest \
 	  --push .

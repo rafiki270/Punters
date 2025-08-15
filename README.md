@@ -153,7 +153,8 @@ TBD.
 For scope and architecture, read REQUIREMENTS.md.
 ## Raspberry Pi one-line install (multi-arch Docker)
 
-We publish a multi-arch image (amd64, arm64, arm/v7) to GHCR on tagged releases. You can deploy to a Pi (or any Debian-based host) with one command:
+We publish a multi-arch image (amd64, arm64) to GHCR on tagged releases. Note: Prisma does not provide engines for 32-bit armv7, so a 64-bit OS is required on Raspberry Pi (e.g., RPi OS 64-bit on Pi 3/4/5).
+You can deploy to a Pi (or any Debian-based host) with one command:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/deploy/install.sh)" -- --port 80 --data-dir /opt/punters/data --image ghcr.io/rafiki270/punters:latest

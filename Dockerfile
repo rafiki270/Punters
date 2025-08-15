@@ -3,7 +3,10 @@ WORKDIR /app
 
 # Install server deps
 COPY package.json package-lock.json* tsconfig.json tsconfig.build.json ./
-RUN npm ci || npm install
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm ci || npm install
 
 # Copy Prisma schema before generating client
 COPY prisma ./prisma
