@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Punters — Free Digital Taproom Displays</title>
+  <meta name="description" content="Free, simple digital taproom displays. Update beers and prices from your phone. Run it on a Raspberry Pi in minutes." />
+  <meta property="og:title" content="Punters — Free Digital Taproom Displays" />
+  <meta property="og:description" content="Free, simple digital taproom displays for bars and taprooms. Raspberry Pi install in minutes." />
+  <meta name="theme-color" content="#0ea5e9" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .glass { background: rgba(255,255,255,0.7); backdrop-filter: saturate(140%) blur(6px); }
+    
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <!-- Header / Nav -->
+  <header class="sticky top-0 z-40 glass border-b border-slate-200">
+    <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="inline-block h-8 w-8 rounded bg-sky-500"></span>
+        <span class="text-xl font-extrabold tracking-tight">Punters</span>
+        <span class="ml-2 inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5">FREE</span>
+      </div>
+      <nav class="hidden sm:flex items-center gap-6 text-sm">
+        <a href="#features" class="hover:text-sky-700">Features</a>
+        <a href="#install" class="hover:text-sky-700">Install</a>
+        <a href="#pricing" class="hover:text-sky-700">Pricing</a>
+      </nav>
+      <a href="#install" class="ml-4 inline-flex items-center gap-2 rounded-md bg-sky-600 text-white text-sm font-semibold px-3 py-2 hover:bg-sky-700">Get Started</a>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section>
+    <div class="mx-auto max-w-6xl px-4 py-14 lg:py-20 grid lg:grid-cols-2 gap-10 items-center">
+      <div>
+        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight">Free Digital Taproom Displays</h1>
+        <p class="mt-4 text-lg text-slate-700">Show what’s on tap, update prices in seconds, and rotate promos — all from an easy admin you’ll actually enjoy using.</p>
+        <div class="mt-6 flex flex-wrap items-center gap-3">
+          <a href="#install" class="inline-flex items-center rounded-md bg-sky-600 text-white font-semibold px-4 py-2.5 hover:bg-sky-700">Install on a Raspberry Pi</a>
+          <span class="text-sm text-slate-600">No subscriptions. No catch. <strong>Free forever.</strong></span>
+        </div>
+      </div>
+      <div class="relative">
+        <div class="aspect-video w-full rounded-xl border border-dashed border-slate-300 bg-white/60 flex items-center justify-center text-slate-500">
+          <div class="text-center px-6">
+            <div class="font-semibold">Admin screenshot placeholder</div>
+            <div class="text-sm">Replace this box with a screenshot of your admin later.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Social proof / free banner -->
+  <section>
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm">
+        <strong>Free for all taprooms.</strong> There’s no other fully free solution — Punters is.
+      </div>
+    </div>
+  </section>
+
+  <!-- Features for taproom owners -->
+  <section id="features" class="mt-12 lg:mt-16">
+    <div class="mx-auto max-w-6xl px-4">
+      <h2 class="text-2xl font-bold">Made for taproom owners</h2>
+      <p class="mt-2 text-slate-700">Everything you need to keep your board tidy and your guests informed.</p>
+      <div class="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="rounded-lg border bg-white p-5">
+          <div class="font-semibold">Update your menu in seconds</div>
+          <p class="mt-1 text-sm text-slate-600">Add beers, tweak prices, and mark kicks — your TVs update right away.</p>
+        </div>
+        <div class="rounded-lg border bg-white p-5">
+          <div class="font-semibold">Show promos & events</div>
+          <p class="mt-1 text-sm text-slate-600">Drop in images for offers and events; they rotate between beer pages.</p>
+        </div>
+        <div class="rounded-lg border bg-white p-5">
+          <div class="font-semibold">Looks great on any TV</div>
+          <p class="mt-1 text-sm text-slate-600">Clean, legible design that fits your brand with simple styling options.</p>
+        </div>
+        <div class="rounded-lg border bg-white p-5">
+          <div class="font-semibold">Use your own hardware</div>
+          <p class="mt-1 text-sm text-slate-600">Runs on a small Raspberry Pi behind the TV. No special kit required.</p>
+        </div>
+        <div class="rounded-lg border bg-white p-5">
+          <div class="font-semibold">No subscriptions</div>
+          <p class="mt-1 text-sm text-slate-600">Punters is free. Keep your money for the good stuff — like hops.</p>
+        </div>
+        <div class="rounded-lg border bg-white p-5">
+          <div class="font-semibold">Simple for your team</div>
+          <p class="mt-1 text-sm text-slate-600">Clear admin. Anyone on staff can make updates without a manual.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works (non-technical) -->
+  <section class="mt-16">
+    <div class="mx-auto max-w-6xl px-4">
+      <h2 class="text-2xl font-bold">How it works</h2>
+      <div class="mt-6 grid sm:grid-cols-3 gap-6">
+        <div class="rounded-lg border bg-white p-5">
+          <div class="text-sky-600 font-semibold">1) Get a Raspberry Pi</div>
+          <p class="mt-1 text-sm text-slate-600">Any recent model works. Plug it into the TV like a tiny computer.</p>
+        </div>
+        <div class="rounded-lg border bg-white p-5">
+          <div class="text-sky-600 font-semibold">2) Put in an SD card</div>
+          <p class="mt-1 text-sm text-slate-600">Power it up and follow the simple on‑screen steps.</p>
+        </div>
+        <div class="rounded-lg border bg-white p-5">
+          <div class="text-sky-600 font-semibold">3) Run the install command</div>
+          <p class="mt-1 text-sm text-slate-600">Paste a single line to install and launch everything for you.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install CTA -->
+  <section id="install" class="mt-16">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="rounded-xl border bg-white p-6">
+        <h3 class="text-xl font-bold">Install (one‑liner)</h3>
+        <p class="mt-1 text-slate-700">On the Raspberry Pi, open Terminal and run:</p>
+        <div class="mt-4 rounded-lg bg-slate-900 text-slate-100 p-4 text-sm flex items-center justify-between gap-3">
+          <code id="cmd" class="break-all">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/deploy/install.sh)" -- --port 80 --data-dir /opt/punters/data</code>
+          <button id="copyBtn" class="shrink-0 inline-flex items-center rounded bg-sky-600 px-3 py-1.5 text-white text-xs font-semibold hover:bg-sky-700">Copy</button>
+        </div>
+        <p class="mt-3 text-xs text-slate-500">That’s it. Your menu will be live on the TV and you can manage it from your phone.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="mt-16 mb-24">
+    <div class="mx-auto max-w-6xl px-4">
+      <h2 class="text-2xl font-bold">Pricing</h2>
+      <div class="mt-6 grid sm:grid-cols-3 gap-6">
+        <div class="rounded-xl border bg-white p-6">
+          <div class="text-emerald-600 font-extrabold text-3xl">Free</div>
+          <div class="mt-1 text-slate-700">Forever. All features.</div>
+          <ul class="mt-4 text-sm text-slate-600 space-y-1">
+            <li>• Unlimited beers and updates</li>
+            <li>• Ads/promos rotation</li>
+            <li>• Simple styling and branding</li>
+          </ul>
+        </div>
+        <div class="rounded-xl border bg-white p-6">
+          <div class="font-extrabold text-3xl">£200</div>
+          <div class="mt-1 text-slate-700">Ready‑to‑go kit</div>
+          <p class="mt-2 text-sm text-slate-600">We ship a box with a Raspberry Pi and a fully installed, tested SD card. Plug it in and you’re done.</p>
+        </div>
+        <div class="rounded-xl border bg-white p-6">
+          <div class="font-extrabold text-3xl">£50</div>
+          <div class="mt-1 text-slate-700">SD card + box</div>
+          <p class="mt-2 text-sm text-slate-600">Prefer your own Pi? We’ll send an SD card with Punters pre‑installed plus a neat enclosure.</p>
+        </div>
+      </div>
+      <div class="mt-8 text-sm text-slate-600">Questions or to order a kit? Get in touch and we’ll sort you out.</div>
+    </div>
+  </section>
+
+  <footer class="border-t bg-white">
+    <div class="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div>© <span id="y"></span> Punters. Designed for taprooms.</div>
+      <div class="flex items-center gap-4">
+        <a href="#install" class="text-sky-700 hover:underline">Get Started</a>
+        <a href="#pricing" class="hover:underline">Pricing</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      const el = document.getElementById('cmd');
+      const text = el.textContent || '';
+      try { await navigator.clipboard.writeText(text); const b = document.getElementById('copyBtn'); b.textContent = 'Copied'; setTimeout(()=> b.textContent='Copy', 1200); } catch {}
+    });
+  </script>
+</body>
+</html>
+

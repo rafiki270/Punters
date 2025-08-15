@@ -70,6 +70,22 @@ async function buildServer() {
   }
   await registerDisplayRoutes(app);
 
+  // Serve background preset images from web/public/bcg at /bcg/*
+  try {
+    const bcgDir = path.join(process.cwd(), 'web', 'public', 'bcg');
+    if (fs.existsSync(bcgDir)) {
+      await app.register(fastifyStatic, {
+        root: bcgDir,
+        prefix: '/bcg/',
+        decorateReply: false,
+      });
+    } else {
+      app.log.warn({ root: bcgDir }, 'background preset dir not found; /bcg/* will be unavailable');
+    }
+  } catch (e) {
+    app.log.warn({ err: (e as any)?.message }, 'failed to register /bcg static');
+  }
+
   // List background images from web/public/bcg
   app.get('/api/backgrounds', async () => {
     try {

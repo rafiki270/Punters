@@ -30,6 +30,7 @@ RUN apt-get update \
 COPY --from=base /app/dist ./dist
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/web/dist ./web/dist
+COPY --from=base /app/web/public ./web/public
 COPY prisma ./prisma
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
