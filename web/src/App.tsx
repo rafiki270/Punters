@@ -278,7 +278,7 @@ function Display() {
         />
       )}
       {/* Floating controls (auto-hide) */}
-      <div className={`fixed top-3 right-3 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto flex items-center gap-2`}>
+      <div className={`fixed top-3 right-3 z-50 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto flex items-center gap-2`}>
         <button onClick={()=>setPaused(p=>!p)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
           {paused ? (
             // Play icon
