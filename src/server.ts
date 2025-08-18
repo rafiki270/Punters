@@ -14,6 +14,8 @@ import { registerDeviceRoutes } from './routes/devices';
 import { registerAuthRoutes } from './auth';
 import { registerAdminRoutes } from './routes/admin';
 import { registerDisplayRoutes } from './routes/display';
+import { registerNetworkRoutes } from './routes/network';
+import { registerBackupRoutes } from './routes/backup';
 import { onChange } from './events';
 import { startDiscovery, getDiscovered, suggestUniqueName } from './discovery';
 import { prisma } from './db';
@@ -59,6 +61,8 @@ async function buildServer() {
   await registerDeviceRoutes(app);
   await registerAuthRoutes(app);
   await registerAdminRoutes(app);
+  await registerNetworkRoutes(app);
+  await registerBackupRoutes(app);
   // Start discovery/advertisement based on settings
   try {
     const s = await prisma.globalSettings.findUnique({ where: { id: 1 } })

@@ -93,19 +93,33 @@ function Display() {
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
+      const docAny = document as any
+      const active = !!(document.fullscreenElement || docAny.webkitFullscreenElement || docAny.mozFullScreenElement || docAny.msFullscreenElement)
+      setIsFullscreen(active)
     }
     document.addEventListener('fullscreenchange', onFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+    // Safari (older) uses webkit-prefixed event
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange as any)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange as any)
+    }
   }, [])
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen()
+    const docAny = document as any
+    const elAny = document.documentElement as any
+    const isFs = !!(document.fullscreenElement || docAny.webkitFullscreenElement || docAny.mozFullScreenElement || docAny.msFullscreenElement)
+    if (!isFs) {
+      if (elAny.requestFullscreen) elAny.requestFullscreen()
+      else if (elAny.webkitRequestFullscreen) elAny.webkitRequestFullscreen() // Safari
+      else if (elAny.mozRequestFullScreen) elAny.mozRequestFullScreen()
+      else if (elAny.msRequestFullscreen) elAny.msRequestFullscreen()
     } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen()
-      }
+      if (document.exitFullscreen) document.exitFullscreen()
+      else if (docAny.webkitExitFullscreen) docAny.webkitExitFullscreen()
+      else if (docAny.mozCancelFullScreen) docAny.mozCancelFullScreen()
+      else if (docAny.msExitFullscreen) docAny.msExitFullscreen()
     }
   }
 
@@ -531,6 +545,7 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
       { key: 'beers', label: 'Beers' },
       { key: 'taps', label: 'Taps' },
       { key: 'media', label: 'Media' },
+      { key: 'backup', label: 'Backup' },
     ] as any : [])
   ]
   // Persist last-opened tab per session
@@ -576,6 +591,7 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
         {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={onRefresh} />}
+        {uiMode==='server' && tab === 'backup' && <BackupPanel />}
         {/* Devices tab removed */}
       </div>
     </div>
@@ -628,6 +644,7 @@ function AdminPage() {
       { key: 'beers', label: 'Beers' },
       { key: 'taps', label: 'Taps' },
       { key: 'media', label: 'Media' },
+      { key: 'backup', label: 'Backup' },
     ] as any : [])
   ]
 
@@ -646,6 +663,7 @@ function AdminPage() {
       {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={loadAll} />}
+      {uiMode==='server' && tab === 'backup' && <BackupPanel />}
     </div>
   )
 }
@@ -927,7 +945,14 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
   const [selServer, setSelServer] = useState<string>(remoteBase || '')
   const [manualServer, setManualServer] = useState<string>(remoteBase || '')
   const [saving, setSaving] = useState(false)
+  const [ipInfo, setIpInfo] = useState<{ clientIp: string; serverIps: Array<{ interface: string; address: string; family: string }>; port?: number } | null>(null)
   useEffect(() => { if (settings) { setRotation(settings.rotationSec); setDefaultSizeId(settings.defaultSizeId ?? ''); const m=((settings as any).mode||'server') as 'server'|'client'; setModeSel(m); const defName = (m==='server'?'punters-server':'punters-client'); setInstanceName(((settings as any).instanceName as string) || defName) } }, [settings])
+  useEffect(() => { fetch('/api/ip').then(r=>r.json()).then(setIpInfo).catch(()=>setIpInfo(null)) }, [])
+  const originProto = (typeof window !== 'undefined' ? window.location.protocol : 'http:')
+  const originPortRaw = (typeof window !== 'undefined' ? window.location.port : '')
+  const originIsHttps = originProto === 'https:'
+  const originPortNum = originPortRaw ? Number(originPortRaw) : (originIsHttps ? 443 : 80)
+  const originPortLabel = (originPortNum && originPortNum !== 80 && originPortNum !== 443) ? `:${originPortNum}` : ''
   const save = async () => {
     if (saving) return
     setSaving(true)
@@ -950,7 +975,28 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
         <div>
           <label className="block text-sm mb-1">Device Name</label>
           <input value={instanceName} onChange={e=>setInstanceName(e.target.value)} placeholder={modeSel==='server'?'punters-server':'punters-client'} className="w-72 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
-          <div className="text-xs opacity-70 mt-1">Advertised via Bonjour. Connect with http://{instanceName}.local:{modeSel==='server'?3000:3000}</div>
+          <div className="text-xs opacity-70 mt-1">
+            Advertised via Bonjour. Connect with {(originIsHttps?'https':'http')}://{instanceName}.local{originPortLabel}
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm mb-1">Current IP Address</label>
+          <div className="text-sm">
+            <div className="opacity-80">Your browser appears as: <span className="font-mono">{ipInfo?.clientIp || '...'}</span></div>
+            {ipInfo?.serverIps?.length ? (
+              <div className="mt-1 text-xs opacity-80">
+                <div className="mb-1">Server interfaces:</div>
+                <ul className="space-y-0.5">
+                  {ipInfo.serverIps.filter(i=>i.family==='IPv4').map((i, idx) => (
+                    <li key={`${i.interface}-${i.address}-${idx}`} className="font-mono">{i.interface}: {i.address}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {(originPortNum !== 80 && originPortNum !== 443) ? (
+              <div className="mt-1 text-xs opacity-80">Port: <span className="font-mono">{originPortNum}</span></div>
+            ) : null}
+          </div>
         </div>
       </div>
       <div>
@@ -1036,6 +1082,70 @@ function SizesPanel({ onRefresh }: { onRefresh: () => void }) {
           <input type="number" placeholder="Volume ml" value={ml} onChange={e=>setMl(Number(e.target.value))} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
           <LoadingButton onClick={create} className="px-3 py-1.5 rounded bg-green-700">Create</LoadingButton>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function BackupPanel() {
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function downloadDb() {
+    try {
+      const res = await fetch('/api/admin/backup/db', { credentials: 'include' })
+      if (!res.ok) throw new Error('Download failed')
+      const blob = await res.blob()
+      // Try to extract filename from header
+      const disp = res.headers.get('Content-Disposition') || ''
+      const match = /filename="?([^";]+)"?/i.exec(disp)
+      const filename = match?.[1] || 'punters-backup.db'
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('Failed to download backup')
+    }
+  }
+
+  async function restoreDb() {
+    if (!file) { alert('Choose a .db file first'); return }
+    if (!confirm('Restore database from selected file? This will overwrite current data.')) return
+    setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/restore/db', { method: 'POST', body: fd, credentials: 'include' })
+      if (!res.ok) {
+        const msg = await res.text().catch(()=> '')
+        throw new Error(msg || 'Restore failed')
+      }
+      alert('Restore completed. The app will reload to apply changes.')
+      window.location.reload()
+    } catch (e) {
+      alert('Failed to restore backup')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
+        <div className="font-semibold mb-2">Download Backup</div>
+        <div className="opacity-80 mb-2">Export the entire database (SQLite) as a .db file.</div>
+        <LoadingButton onClick={downloadDb} className="px-3 py-1.5 rounded bg-blue-600 text-white">Download Database</LoadingButton>
+      </div>
+      <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
+        <div className="font-semibold mb-2">Restore Backup</div>
+        <div className="opacity-80 mb-2">Upload a previously downloaded .db file to restore. This will overwrite current data.</div>
+        <input type="file" accept=".db,application/octet-stream" onChange={e=>setFile(e.target.files?.[0] || null)} className="mb-2" />
+        <LoadingButton onClick={restoreDb} className={`px-3 py-1.5 rounded bg-red-700 text-white ${busy?'opacity-80 cursor-not-allowed':''}`}>Restore Database</LoadingButton>
       </div>
     </div>
   )
