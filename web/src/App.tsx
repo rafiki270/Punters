@@ -81,6 +81,8 @@ function Display() {
   const [device, setDevice] = useState<Device | null>(null)
   const [localDisplayMode, setLocalDisplayMode] = useState<'all'|'beer'|'ads'>(()=> (localStorage.getItem('localDisplayMode') as any) || 'all')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // state for screen sync panel
+  const [showSync, setShowSync] = useState(false)
   // Beer columns and items per page are now global defaults (server) with device overrides
   // Style values now inherit from server settings by default; device may override
   // Local client-only fallbacks retained for Items per Page only.
@@ -90,6 +92,19 @@ function Display() {
     const id = sp.get('deviceId')
     return id ? Number(id) : null
   }, [])
+  // Screen sync params read once (allow adjustments via UI which update URL)
+  const initialScreenIndex = useMemo(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const v = Number(sp.get('screenIndex') || '')
+    return Number.isFinite(v) && v > 0 ? v : 1
+  }, [])
+  const initialScreenCount = useMemo(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const v = Number(sp.get('screenCount') || '')
+    return Number.isFinite(v) && v > 0 ? v : 1
+  }, [])
+  const [screenIndexParam, setScreenIndexParam] = useState<number>(initialScreenIndex)
+  const [screenCountParam, setScreenCountParam] = useState<number>(initialScreenCount)
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -168,12 +183,20 @@ function Display() {
     if (mode === 'client' && remoteBase) url = remoteBase
     const sock: Socket = io(url, { transports: ['websocket'], reconnection: true })
     const onChanged = () => { loadAll() }
+    const onTick = (p: { epoch: number }) => { try { setEpoch(p.epoch) } catch {} }
     sock.on('changed', onChanged)
+    sock.on('tick', onTick)
     return () => { try { sock.off('changed', onChanged); sock.close() } catch {} }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, remoteBase])
 
+  // Shared epoch from server tick for sync
+  const [epoch, setEpoch] = useState<number>(Date.now())
+  const syncEnabled = (screenCountParam > 1 || screenIndexParam > 1)
+
+  // Local fallback timer (disabled when sync is enabled)
   useEffect(() => {
+    if (syncEnabled) return
     const dur = settings?.rotationSec ?? 90
     setSecs(dur)
     const id = setInterval(() => setSecs((s) => {
@@ -185,7 +208,7 @@ function Display() {
       return s - 1
     }), 1000)
     return () => clearInterval(id)
-  }, [settings?.rotationSec, paused])
+  }, [settings?.rotationSec, paused, syncEnabled])
 
   // Keep tap context so duplicates of the same beer on different taps are supported
   const tapBeers = useMemo(() => taps.filter(t => t.beer != null).map(t => ({ tapNumber: t.tapNumber, beer: t.beer as Beer })), [taps])
@@ -231,7 +254,15 @@ function Display() {
     return filtered.length ? filtered : [{ type: 'beer', data: [] }]
   }, [beerPages, ads])
 
-  const cur = slides[pageIdx % slides.length]
+  // Derive synchronized page index when enabled
+  const rotation = settings?.rotationSec ?? 90
+  const slidesLen = Math.max(1, slides.length)
+  const cycle = Math.floor((epoch / 1000) / Math.max(1, rotation))
+  const baseIdx = (cycle * Math.max(1, screenCountParam)) % slidesLen
+  const syncPageIdx = (baseIdx + Math.max(1, screenIndexParam) - 1) % slidesLen
+  const effPageIdx = syncEnabled ? syncPageIdx : (pageIdx % slidesLen)
+  const effSecs = syncEnabled ? (rotation - Math.floor((epoch/1000) % Math.max(1, rotation))) : secs
+  const cur = slides[effPageIdx]
   const curIsAd = cur.type === 'ad' || cur.type === 'adpair'
   const curIsFullscreen = cur.type === 'ad' && (cur.data as Ad)?.fullscreen
   const footPadPx = ((settings?.showFooter !== false) && !curIsFullscreen) ? 96 : 24
@@ -316,6 +347,28 @@ function Display() {
             </svg>
           )}
         </button>
+        {/* Screen sync controls */}
+        <div className="relative">
+          <button onClick={()=>setShowSync(s=>!s)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Sync</button>
+          {showSync && (
+            <div className="absolute right-0 mt-2 w-64 rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 shadow-lg text-sm">
+              <div className="font-semibold mb-2">Screen Sync</div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="mr-2">Screen #</label>
+                <input type="number" min={1} value={screenIndexParam}
+                  onChange={(e)=>{ const v=Math.max(1, Number(e.target.value)||1); setScreenIndexParam(v); const u=new URL(window.location.href); if(v>1)u.searchParams.set('screenIndex',String(v)); else u.searchParams.delete('screenIndex'); window.history.replaceState({},'',u.toString()) }}
+                  className="w-20 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800" />
+              </div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="mr-2">Total screens</label>
+                <input type="number" min={1} value={screenCountParam}
+                  onChange={(e)=>{ const v=Math.max(1, Number(e.target.value)||1); setScreenCountParam(v); const u=new URL(window.location.href); if(v>1)u.searchParams.set('screenCount',String(v)); else u.searchParams.delete('screenCount'); window.history.replaceState({},'',u.toString()) }}
+                  className="w-20 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800" />
+              </div>
+              <button onClick={()=>{ try{ navigator.clipboard.writeText(window.location.href) }catch{} }} className="w-full px-3 py-1.5 rounded bg-green-600 text-white font-semibold">Copy Link</button>
+            </div>
+          )}
+        </div>
         <button onClick={() => setAdminOpen((v) => !v)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
           {adminOpen ? 'Close Admin' : 'Admin'}
         </button>
@@ -516,7 +569,7 @@ function Display() {
         <div className="fixed inset-x-0 bottom-3 flex justify-center">
           <div className="px-7 py-2 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
             <div className="flex items-center gap-3">
-              <span>Page { (pageIdx % slides.length) + 1 } of { slides.length } • changes in {secs} seconds</span>
+              <span>Page { (effPageIdx % slides.length) + 1 } of { slides.length } • changes in {effSecs} seconds</span>
             </div>
             <div className="text-[10px] leading-tight opacity-80">© Not That California R&D</div>
           </div>
