@@ -69,6 +69,9 @@ model Beer {
   badgeAssetId Int?
   badgeAsset   Asset?   @relation("BadgeAsset", fields: [badgeAssetId], references: [id])
   isGuest     Boolean   @default(false)
+  glutenFree  Boolean   @default(false)
+  vegan       Boolean   @default(false)
+  alcoholFree Boolean   @default(false)
   active      Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

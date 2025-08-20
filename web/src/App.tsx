@@ -83,6 +83,7 @@ function Display() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   // state for screen sync panel
   const [showSync, setShowSync] = useState(false)
+  useEffect(() => { if (adminOpen) setShowSync(false) }, [adminOpen])
   // Beer columns and items per page are now global defaults (server) with device overrides
   // Style values now inherit from server settings by default; device may override
   // Local client-only fallbacks retained for Items per Page only.
@@ -184,14 +185,23 @@ function Display() {
     const sock: Socket = io(url, { transports: ['websocket'], reconnection: true })
     const onChanged = () => { loadAll() }
     const onTick = (p: { epoch: number }) => { try { setEpoch(p.epoch) } catch {} }
+    const onSyncState = (p: { cycleOffset?: number; anchorMs?: number|null }) => {
+      if (typeof p.cycleOffset === 'number') setCycleOffset(p.cycleOffset)
+      if ('anchorMs' in p) setAnchorMs(p.anchorMs ?? null)
+    }
     sock.on('changed', onChanged)
     sock.on('tick', onTick)
-    return () => { try { sock.off('changed', onChanged); sock.close() } catch {} }
+    sock.on('sync_state', onSyncState)
+    socketRef.current = sock
+    return () => { try { sock.off('changed', onChanged); sock.off('tick', onTick); sock.off('sync_state', onSyncState); sock.close() } catch {} }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, remoteBase])
 
   // Shared epoch from server tick for sync
   const [epoch, setEpoch] = useState<number>(Date.now())
+  const [cycleOffset, setCycleOffset] = useState<number>(0)
+  const [anchorMs, setAnchorMs] = useState<number|null>(null)
+  const socketRef = useRef<Socket|null>(null)
   const syncEnabled = (screenCountParam > 1 || screenIndexParam > 1)
 
   // Local fallback timer (disabled when sync is enabled)
@@ -211,7 +221,7 @@ function Display() {
   }, [settings?.rotationSec, paused, syncEnabled])
 
   // Keep tap context so duplicates of the same beer on different taps are supported
-  const tapBeers = useMemo(() => taps.filter(t => t.beer != null).map(t => ({ tapNumber: t.tapNumber, beer: t.beer as Beer })), [taps])
+  const tapBeers = useMemo(() => taps.filter(t => t.beer != null).map(t => ({ tapNumber: t.tapNumber, status: t.status, beer: t.beer as Beer })), [taps])
 
   function formatMoney(amountMinor: number, currency?: string): string {
     const cur = currency || settings?.currency || 'GBP'
@@ -220,9 +230,9 @@ function Display() {
   }
 
   // Build slides: beer pages then each ad image
-  const beerPages: Array<Array<{ tapNumber: number; beer: Beer }>> = useMemo(() => {
+  const beerPages: Array<Array<{ tapNumber: number; status: string; beer: Beer }>> = useMemo(() => {
     const perPage = device?.itemsPerColumn ? (columns * itemsPerColumn) : (settings?.itemsPerPage || 10)
-    const pages: Array<Array<{ tapNumber: number; beer: Beer }>> = []
+    const pages: Array<Array<{ tapNumber: number; status: string; beer: Beer }>> = []
     for (let i = 0; i < tapBeers.length; i += perPage) pages.push(tapBeers.slice(i, i + perPage))
     return pages.length ? pages : [[]]
   }, [tapBeers, columns, itemsPerColumn, device?.itemsPerColumn, settings?.itemsPerPage])
@@ -257,11 +267,12 @@ function Display() {
   // Derive synchronized page index when enabled
   const rotation = settings?.rotationSec ?? 90
   const slidesLen = Math.max(1, slides.length)
-  const cycle = Math.floor((epoch / 1000) / Math.max(1, rotation))
+  const baseSeconds = anchorMs ? Math.max(0, (epoch - anchorMs) / 1000) : (epoch / 1000)
+  const cycle = Math.floor(baseSeconds / Math.max(1, rotation)) + cycleOffset
   const baseIdx = (cycle * Math.max(1, screenCountParam)) % slidesLen
   const syncPageIdx = (baseIdx + Math.max(1, screenIndexParam) - 1) % slidesLen
   const effPageIdx = syncEnabled ? syncPageIdx : (pageIdx % slidesLen)
-  const effSecs = syncEnabled ? (rotation - Math.floor((epoch/1000) % Math.max(1, rotation))) : secs
+  const effSecs = syncEnabled ? (rotation - Math.floor((baseSeconds) % Math.max(1, rotation))) : secs
   const cur = slides[effPageIdx]
   const curIsAd = cur.type === 'ad' || cur.type === 'adpair'
   const curIsFullscreen = cur.type === 'ad' && (cur.data as Ad)?.fullscreen
@@ -333,7 +344,7 @@ function Display() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
           )}
         </button>
-        <button onClick={()=>{ setPageIdx(p=>p+1); setSecs(settings?.rotationSec ?? 90) }} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" aria-label="Next Page">
+        <button onClick={()=>{ try { socketRef.current?.emit('next_page') } catch {}; setPageIdx(p=>p+1); setSecs(settings?.rotationSec ?? 90) }} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" aria-label="Next Page">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M7 6h2v12H7zM11 6l8 6-8 6z"/></svg>
         </button>
         <button onClick={toggleFullscreen} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
@@ -349,7 +360,7 @@ function Display() {
         </button>
         {/* Screen sync controls */}
         <div className="relative">
-          <button onClick={()=>setShowSync(s=>!s)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Sync</button>
+          <button onClick={()=>setShowSync(s=>{ const next=!s; if (next) setAdminOpen(false); return next })} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Sync</button>
           {showSync && (
             <div className="absolute right-0 mt-2 w-64 rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 shadow-lg text-sm">
               <div className="font-semibold mb-2">Screen Sync</div>
@@ -365,11 +376,11 @@ function Display() {
                   onChange={(e)=>{ const v=Math.max(1, Number(e.target.value)||1); setScreenCountParam(v); const u=new URL(window.location.href); if(v>1)u.searchParams.set('screenCount',String(v)); else u.searchParams.delete('screenCount'); window.history.replaceState({},'',u.toString()) }}
                   className="w-20 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800" />
               </div>
-              <button onClick={()=>{ try{ navigator.clipboard.writeText(window.location.href) }catch{} }} className="w-full px-3 py-1.5 rounded bg-green-600 text-white font-semibold">Copy Link</button>
+              <button onClick={()=>{ try { socketRef.current?.emit('sync_now') } catch {}; setShowSync(false) }} className="w-full px-3 py-1.5 rounded bg-green-600 text-white font-semibold">Sync Now</button>
             </div>
           )}
         </div>
-        <button onClick={() => setAdminOpen((v) => !v)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
+        <button onClick={() => setAdminOpen((v) => { const next=!v; if (next) setShowSync(false); return next })} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
           {adminOpen ? 'Close Admin' : 'Admin'}
         </button>
       </div>
@@ -452,15 +463,17 @@ function Display() {
             </div>
           ) : (
             <div className="grid" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))`, columnGap: `${effColumnGap}px` }}>
-              {cur.data.map((row: { tapNumber: number; beer: Beer }, idx: number) => {
+              {cur.data.map((row: { tapNumber: number; status: string; beer: Beer }, idx: number) => {
                 // Slider-driven sizing: compute scale factor in [0.7 .. 2.2]
                 const factor = 0.7 + (effCellScale/100) * 1.5
                 const imgPx = Math.round(64 * factor)
                 const titlePx = Math.round(20 * factor)
                 const subPx = Math.round(14 * factor)
                 const padY = Math.round(12 * factor)
+                const isKicked = (row.status === 'kicked')
+                const strikeCls = isKicked ? 'line-through opacity-60' : ''
                 return (
-                <div key={row.tapNumber} className={`flex items-center gap-4 border-b border-neutral-200/40`} style={{ paddingTop: padY, paddingBottom: padY }}>
+                <div key={row.tapNumber} className={`relative flex items-center gap-4 border-b border-neutral-200/40`} style={{ paddingTop: padY, paddingBottom: padY }}>
                   <div className={`rounded-full bg-neutral-200 overflow-hidden flex items-center justify-center`} style={{ width: imgPx, height: imgPx }}>
                     {row.beer.badgeAssetId ? (
                       <img src={`${contentBase}/api/assets/${row.beer.badgeAssetId}/content`} alt="badge" className="object-contain w-full h-full" />
@@ -469,7 +482,7 @@ function Display() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className={`font-bold truncate flex items-center gap-2`} style={{ fontSize: titlePx }}>
+                    <div className={`font-bold truncate flex items-center gap-2 ${strikeCls}`} style={{ fontSize: titlePx }}>
                       <span className="opacity-70">{row.tapNumber} -</span>
                       <span className="truncate">{row.beer.name}</span>
                       {row.beer.colorHex && row.beer.colorHex !== '#00000000' && (
@@ -502,10 +515,10 @@ function Display() {
                         </svg>
                       )}
                     </div>
-                    <div className={`truncate opacity-80`} style={{ fontSize: subPx }}>{row.beer.brewery}</div>
-                    <div className={`truncate opacity-80`} style={{ fontSize: subPx }}>
+                    <div className={`truncate opacity-80 ${strikeCls}`} style={{ fontSize: subPx }}>{row.beer.brewery}</div>
+                    <div className={`truncate opacity-80 ${strikeCls}`} style={{ fontSize: subPx }}>
                       <span>{row.beer.style}</span>
-                      {row.beer.abv != null && <span className="font-semibold"> • {row.beer.abv.toFixed(1)}% ABV</span>}
+                      {row.beer.abv != null && <span className={`font-semibold ${strikeCls}`}> • {row.beer.abv.toFixed(1)}% ABV</span>}
                     </div>
                   </div>
                   <div className="text-right">
@@ -522,7 +535,7 @@ function Display() {
                       return (
                         <div className="flex flex-col items-end gap-0.5">
                           {items.map(({p,isDefault},i) => (
-                            <div key={i} className={`${isDefault? 'font-semibold text-lg' : 'text-sm opacity-90'} whitespace-nowrap`}>
+                            <div key={i} className={`${isDefault? 'font-semibold text-lg' : 'text-sm opacity-90'} whitespace-nowrap ${strikeCls}`}>
                               {formatMoney(p.amountMinor, p.currency)}{p.size?.name ? ` — ${p.size.name}` : ''}
                             </div>
                           ))}
@@ -530,6 +543,21 @@ function Display() {
                       )
                     })()}
                   </div>
+                  {isKicked && !adminOpen && (
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                      <div
+                        className="text-red-600 font-extrabold uppercase rounded-2xl border-4 border-red-600"
+                        style={{
+                          transform: 'rotate(-12deg)',
+                          padding: `${Math.max(6, Math.round(6 * factor))}px ${Math.max(10, Math.round(14 * factor))}px`,
+                          fontSize: Math.max(14, Math.round(18 * factor)),
+                          letterSpacing: '0.08em'
+                        }}
+                      >
+                        GONE
+                       </div>
+                     </div>
+                   )}
                 </div>
               )})}
             </div>
@@ -565,12 +593,14 @@ function Display() {
           ))}
         </div>
       )}
-      {slides.length > 1 && (settings?.showFooter !== false) && !curIsFullscreen && (
+      {(settings?.showFooter !== false) && !curIsFullscreen && (
         <div className="fixed inset-x-0 bottom-3 flex justify-center">
           <div className="px-7 py-2 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
-            <div className="flex items-center gap-3">
-              <span>Page { (effPageIdx % slides.length) + 1 } of { slides.length } • changes in {effSecs} seconds</span>
-            </div>
+            {slides.length > 1 && (
+              <div className="flex items-center gap-3">
+                <span>Page { (effPageIdx % slides.length) + 1 } of { slides.length } • changes in {effSecs} seconds</span>
+              </div>
+            )}
             <div className="text-[10px] leading-tight opacity-80">© Not That California R&D</div>
           </div>
         </div>
@@ -1207,9 +1237,12 @@ function BackupPanel() {
 function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void }) {
   const [beers, setBeers] = useState<Beer[]>([])
   const [brewery, setBrewery] = useState<string>('')
-  const [form, setForm] = useState<{ name:string; brewery:string; style:string; abv?:number; isGuest:boolean; prices: Record<number, number>; colorHex?: string|null }>({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{}, colorHex: null })
+  const [form, setForm] = useState<{ name:string; brewery:string; style:string; abv?:number; isGuest:boolean; glutenFree?:boolean; vegan?:boolean; alcoholFree?:boolean; prices: Record<number, number>; colorHex?: string|null }>({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, glutenFree:false, vegan:false, alcoholFree:false, prices:{}, colorHex: null })
   const [file, setFile] = useState<File|null>(null)
+  const [badgePreviewId, setBadgePreviewId] = useState<number|null>(null)
+  const [removeBadge, setRemoveBadge] = useState<boolean>(false)
   const [breweryOpen, setBreweryOpen] = useState(false)
+  const [breweryHighlight, setBreweryHighlight] = useState<number>(-1)
   const breweryList = useMemo(() => Array.from(new Set(beers.map(b=>b.brewery).filter(Boolean))).sort((a,b)=>a.localeCompare(b)), [beers])
   const [editingId, setEditingId] = useState<number|null>(null)
   useEffect(()=>{ fetch('/api/beers').then(r=>r.json()).then(setBeers)},[])
@@ -1217,22 +1250,25 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
     let badgeAssetId: number | undefined
     if (file) { const fd=new FormData(); fd.append('file', file); const up=await fetch('/api/upload',{method:'POST',body:fd}); if(up.ok){ const a=await up.json(); badgeAssetId=a.id } }
     if (editingId==null) {
-      const res = await fetch('/api/beers', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name:form.name, brewery:form.brewery, style:form.style, abv:form.abv, isGuest:form.isGuest, colorHex: form.colorHex || undefined, prefillPrices:false, badgeAssetId }) })
+      const res = await fetch('/api/beers', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name:form.name, brewery:form.brewery, style:form.style, abv:form.abv, isGuest:form.isGuest, glutenFree: !!form.glutenFree, vegan: !!form.vegan, alcoholFree: !!form.alcoholFree, colorHex: form.colorHex || undefined, prefillPrices:false, badgeAssetId }) })
       if (!res.ok) { alert('Failed to create beer'); return }
       const b = await res.json(); if (!b?.id) return
       const prices = Object.entries(form.prices).map(([sid, amt]) => ({ serveSizeId:Number(sid), amountMinor: Math.round(Number(amt)*100), currency:'GBP' }))
       if (prices.length) await fetch(`/api/beers/${b.id}/prices`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prices }) })
     } else {
-      await fetch(`/api/beers/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name:form.name, brewery:form.brewery, style:form.style, abv:form.abv, isGuest:form.isGuest, colorHex: form.colorHex || undefined, ...(badgeAssetId?{badgeAssetId}:{}) }) })
+      const body: any = { name:form.name, brewery:form.brewery, style:form.style, abv:form.abv, isGuest:form.isGuest, glutenFree: !!form.glutenFree, vegan: !!form.vegan, alcoholFree: !!form.alcoholFree, colorHex: form.colorHex || undefined }
+      if (typeof badgeAssetId === 'number') body.badgeAssetId = badgeAssetId
+      else if (removeBadge) body.badgeAssetId = null
+      await fetch(`/api/beers/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
       const prices = Object.entries(form.prices).map(([sid, amt]) => ({ serveSizeId:Number(sid), amountMinor: Math.round(Number(amt)*100), currency:'GBP' }))
       if (prices.length) await fetch(`/api/beers/${editingId}/prices`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prices }) })
     }
-    setEditingId(null); setForm({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{}, colorHex: null }); setFile(null)
+    setEditingId(null); setForm({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, glutenFree:false, vegan:false, alcoholFree:false, prices:{}, colorHex: null }); setFile(null); setBadgePreviewId(null); setRemoveBadge(false)
     const fresh = await fetch('/api/beers').then(r=>r.json()); setBeers(fresh); await onRefresh()
   }
   const archive = async (id:number) => { await fetch(`/api/beers/${id}`, { method:'DELETE' }); const fresh = await fetch('/api/beers').then(r=>r.json()); setBeers(fresh); await onRefresh() }
-  const openEdit = async (id:number) => { const b=await fetch(`/api/beers/${id}`).then(r=>r.json()); setEditingId(id); setForm({ name:b.name, brewery:b.brewery, style:b.style, abv:b.abv, isGuest:b.isGuest, prices:Object.fromEntries((b.prices||[]).map((p:any)=>[p.serveSizeId,(p.amountMinor||0)/100])), colorHex: b.colorHex || null }); setFile(null) }
-  const cancel = () => { setEditingId(null); setForm({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, prices:{}, colorHex: null }); setFile(null) }
+  const openEdit = async (id:number) => { const b=await fetch(`/api/beers/${id}`).then(r=>r.json()); setEditingId(id); setForm({ name:b.name, brewery:b.brewery, style:b.style, abv:b.abv, isGuest:b.isGuest, glutenFree: !!(b as any).glutenFree, vegan: !!(b as any).vegan, alcoholFree: !!(b as any).alcoholFree, prices:Object.fromEntries((b.prices||[]).map((p:any)=>[p.serveSizeId,(p.amountMinor||0)/100])), colorHex: b.colorHex || null }); setFile(null); setBadgePreviewId((b as any).badgeAssetId ?? null); setRemoveBadge(false) }
+  const cancel = () => { setEditingId(null); setForm({ name:'', brewery:'', style:'', abv: undefined, isGuest:false, glutenFree:false, vegan:false, alcoholFree:false, prices:{}, colorHex: null }); setFile(null); setBadgePreviewId(null); setRemoveBadge(false) }
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div>
@@ -1270,21 +1306,36 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
             <input
               placeholder="Brewery"
               value={form.brewery}
-              onChange={e=>{ setForm({...form, brewery:e.target.value}); setBreweryOpen(true) }}
-              onFocus={()=>setBreweryOpen(true)}
+              onChange={e=>{ setForm({...form, brewery:e.target.value}); setBreweryOpen(true); setBreweryHighlight(-1) }}
+              onFocus={()=>{ setBreweryOpen(true); setBreweryHighlight(-1) }}
               onBlur={()=>setTimeout(()=>setBreweryOpen(false), 150)}
+              onKeyDown={(e)=>{
+                const q = (form.brewery||'').toLowerCase()
+                const list = (q ? breweryList.filter(n => n.toLowerCase().includes(q)) : breweryList).slice(0,10)
+                if (e.key === 'ArrowDown') { e.preventDefault(); setBreweryOpen(true); setBreweryHighlight(h => Math.min(list.length-1, h+1)) }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setBreweryOpen(true); setBreweryHighlight(h => Math.max(-1, h-1)) }
+                else if (e.key === 'Enter') {
+                  if (breweryOpen && breweryHighlight >= 0 && breweryHighlight < list.length) {
+                    e.preventDefault();
+                    setForm({...form, brewery: list[breweryHighlight]});
+                    setBreweryOpen(false);
+                    setBreweryHighlight(-1);
+                  }
+                } else if (e.key === 'Escape') { setBreweryOpen(false); setBreweryHighlight(-1) }
+              }}
               className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700"
             />
-            {breweryOpen && (form.brewery||'').length > 0 && (
+            {breweryOpen && (
               <div className="absolute z-20 mt-1 w-full max-h-48 overflow-auto rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow">
-                {breweryList.filter(n => n.toLowerCase().includes((form.brewery||'').toLowerCase())).slice(0,10).map(name => (
+                {((form.brewery||'').trim() ? breweryList.filter(n => n.toLowerCase().includes((form.brewery||'').toLowerCase())) : breweryList).slice(0,10).map((name, idx, arr) => (
                   <div key={name}
-                       onMouseDown={(e)=>{ e.preventDefault(); setForm({...form, brewery: name}); setBreweryOpen(false) }}
-                       className="px-2 py-1 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                       onMouseDown={(e)=>{ e.preventDefault(); setForm({...form, brewery: name}); setBreweryOpen(false); setBreweryHighlight(-1) }}
+                       className={`px-2 py-1 cursor-pointer ${breweryHighlight===idx ? 'bg-neutral-100 dark:bg-neutral-800' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'}`}
+                       onMouseEnter={()=>setBreweryHighlight(idx)}>
                     {name}
                   </div>
                 ))}
-                {breweryList.filter(n => n.toLowerCase().includes((form.brewery||'').toLowerCase())).length===0 && (
+                {((form.brewery||'').trim() ? breweryList.filter(n => n.toLowerCase().includes((form.brewery||'').toLowerCase())) : breweryList).length===0 && (
                   <div className="px-2 py-1 opacity-60 text-sm">No matches</div>
                 )}
               </div>
@@ -1292,7 +1343,12 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
           </div>
           <input placeholder="Style" value={form.style} onChange={e=>setForm({...form, style:e.target.value})} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
           <input type="number" step="0.1" placeholder="ABV" value={form.abv ?? ''} onChange={e=>setForm({...form, abv: e.target.value?Number(e.target.value):undefined})} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
-          <label className="flex items-center gap-2"><input type="checkbox" checked={form.isGuest} onChange={e=>setForm({...form, isGuest:e.target.checked})} /> Guest Beer</label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2">
+            <label className="flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={form.isGuest} onChange={e=>setForm({...form, isGuest:e.target.checked})} /> Guest Beer</label>
+            <label className="flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={!!form.glutenFree} onChange={e=>setForm({...form, glutenFree:e.target.checked})} /> Gluten Free</label>
+            <label className="flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={!!form.vegan} onChange={e=>setForm({...form, vegan:e.target.checked})} /> Vegan</label>
+            <label className="flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={!!form.alcoholFree} onChange={e=>setForm({...form, alcoholFree:e.target.checked})} /> Alcohol Free</label>
+          </div>
           <div className="border rounded p-2 border-neutral-300 dark:border-neutral-800">
             <div className="font-semibold mb-1">Prices</div>
             {sizes.map(s => (
@@ -1311,8 +1367,16 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
             <div className="text-xs opacity-70 mt-1">If transparent, the beer icon is hidden.</div>
           </div>
           <div className="border rounded p-2 border-neutral-300 dark:border-neutral-800">
-            <div className="font-semibold mb-1">Badge Image {editingId==null?'(optional)':'(replace optional)'}</div>
-            <input type="file" accept="image/jpeg,image/png" onChange={e=>{ setFile(e.target.files?.[0] ?? null); (e.target as HTMLInputElement).value='' }} className="block w-full text-sm text-neutral-900 dark:text-neutral-100 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-neutral-700 dark:hover:file:bg-neutral-600" />
+            <div className="flex items-center justify-between mb-1">
+              <div className="font-semibold">Badge Image {editingId==null?'(optional)':'(replace optional)'}</div>
+              {editingId!=null && badgePreviewId!=null && !removeBadge && (
+                <div className="flex items-center gap-2">
+                  <img src={`/api/assets/${badgePreviewId}/content`} alt="badge" className="h-8 w-8 rounded-full object-cover border border-neutral-300 dark:border-neutral-700" />
+                  <button type="button" onClick={()=>{ setRemoveBadge(true); setBadgePreviewId(null); setFile(null) }} className="text-xs px-2 py-0.5 rounded bg-neutral-200 text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Remove</button>
+                </div>
+              )}
+            </div>
+            <input type="file" accept="image/jpeg,image/png" onChange={e=>{ setFile(e.target.files?.[0] ?? null); setRemoveBadge(false); (e.target as HTMLInputElement).value='' }} className="block w-full text-sm text-neutral-900 dark:text-neutral-100 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-neutral-700 dark:hover:file:bg-neutral-600" />
           </div>
           <div className="flex gap-2">
             <LoadingButton onClick={submit} className="px-3 py-1.5 rounded bg-green-700 text-white">{editingId==null?'Create':'Save'}</LoadingButton>
@@ -1330,6 +1394,7 @@ function TapsPanel({ onRefresh }: { onRefresh: () => void }) {
   const [allBeers, setAllBeers] = useState<Beer[]>([])
   const [queries, setQueries] = useState<Record<number, string>>({})
   const [focusTap, setFocusTap] = useState<number | null>(null)
+  const [tapHighlight, setTapHighlight] = useState<Record<number, number>>({})
 
   const refreshTaps = async () => { const t = await fetch('/api/taps').then(r=>r.json()); setTaps(t); setTapCount(t.length); await onRefresh() }
   useEffect(()=>{ refreshTaps(); fetch('/api/beers').then(r=>r.json()).then(setAllBeers) },[])
@@ -1359,24 +1424,52 @@ function TapsPanel({ onRefresh }: { onRefresh: () => void }) {
             <div className="flex items-center justify-between">
               <div className="font-semibold">Tap {t.tapNumber}</div>
               <div className="flex gap-2">
-                <LoadingButton onClick={()=>setStatus(t.tapNumber,'kicked')} className="px-2 py-0.5 rounded bg-neutral-200 text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Kicked</LoadingButton>
+                <LoadingButton onClick={()=>setStatus(t.tapNumber,'kicked')} className="px-2 py-0.5 rounded bg-neutral-200 text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Beer Gone</LoadingButton>
                 <LoadingButton onClick={()=>clearTap(t.tapNumber)} className="px-2 py-0.5 rounded bg-neutral-200 text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Clear</LoadingButton>
               </div>
             </div>
             <div className="mt-2 flex items-center gap-2">
+              {t.status === 'kicked' && (
+                <span title="Beer gone" aria-label="Beer gone" className="text-red-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4">
+                    <circle cx="12" cy="12" r="10" fill="currentColor" />
+                    <rect x="7" y="7" width="10" height="10" rx="1" ry="1" fill="#ffffff" />
+                  </svg>
+                </span>
+              )}
               <div className="flex-1">
                 <input
                   placeholder={t.beer ? `${t.beer.name} — ${t.beer.brewery}` : 'Assign beer...'}
                   value={queries[t.tapNumber] || ''}
-                  onChange={(e)=>setQueries(q=>({ ...q, [t.tapNumber]: e.target.value }))}
-                  onFocus={()=>setFocusTap(t.tapNumber)}
+                  onChange={(e)=>{ setQueries(q=>({ ...q, [t.tapNumber]: e.target.value })); setTapHighlight(h=>({ ...h, [t.tapNumber]: -1 })) }}
+                  onFocus={()=>{ setFocusTap(t.tapNumber); setTapHighlight(h=>({ ...h, [t.tapNumber]: -1 })) }}
                   onBlur={()=>setTimeout(()=>setFocusTap(s=> (s===t.tapNumber ? null : s)), 150)}
+                  onKeyDown={(e)=>{
+                    const list = getSuggestions(t.tapNumber)
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setFocusTap(t.tapNumber); setTapHighlight(h=>({ ...h, [t.tapNumber]: Math.min((h[t.tapNumber] ?? -1)+1, list.length-1) })) }
+                    else if (e.key === 'ArrowUp') { e.preventDefault(); setFocusTap(t.tapNumber); setTapHighlight(h=>({ ...h, [t.tapNumber]: Math.max((h[t.tapNumber] ?? -1)-1, -1) })) }
+                    else if (e.key === 'Enter') {
+                      const idx = tapHighlight[t.tapNumber] ?? -1
+                      if (focusTap===t.tapNumber && idx >= 0 && idx < list.length) {
+                        e.preventDefault();
+                        assign(t.tapNumber, list[idx].id)
+                        setFocusTap(null)
+                        setTapHighlight(h=>({ ...h, [t.tapNumber]: -1 }))
+                      }
+                    } else if (e.key === 'Escape') { setFocusTap(null); setTapHighlight(h=>({ ...h, [t.tapNumber]: -1 })) }
+                  }}
                   className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700"
                 />
                 {(focusTap===t.tapNumber) && (
                   <div className="mt-1 max-h-48 overflow-auto rounded border border-neutral-300 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-                    {getSuggestions(t.tapNumber).map(b => (
-                      <button key={`${t.tapNumber}-${b.id}`} onMouseDown={(e)=>e.preventDefault()} onClick={()=>assign(t.tapNumber, b.id)} className="block w-full text-left px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                    {getSuggestions(t.tapNumber).map((b, idx) => (
+                      <button
+                        key={`${t.tapNumber}-${b.id}`}
+                        onMouseDown={(e)=>e.preventDefault()}
+                        onClick={()=>assign(t.tapNumber, b.id)}
+                        onMouseEnter={()=>setTapHighlight(h=>({ ...h, [t.tapNumber]: idx }))}
+                        className={`block w-full text-left px-2 py-1 ${ (tapHighlight[t.tapNumber] ?? -1) === idx ? 'bg-neutral-100 dark:bg-neutral-800' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'}`}
+                      >
                         {b.name} — {b.brewery}
                       </button>
                     ))}

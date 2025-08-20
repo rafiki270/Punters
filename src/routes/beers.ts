@@ -13,8 +13,11 @@ const BeerCreate = z.object({
   description: z.string().optional(),
   colorHex: z.string().optional(),
   tags: z.string().optional(),
-  badgeAssetId: z.number().int().optional(),
+  badgeAssetId: z.number().int().nullable().optional(),
   isGuest: z.boolean().optional(),
+  glutenFree: z.boolean().optional(),
+  vegan: z.boolean().optional(),
+  alcoholFree: z.boolean().optional(),
   prefillPrices: z.boolean().optional()
 })
 
@@ -56,7 +59,7 @@ export async function registerBeerRoutes(app: FastifyInstance) {
   app.post('/api/beers', { preHandler: requireAdmin }, async (req) => {
     const data = BeerCreate.parse((req as any).body)
     const { prefillPrices, ...beerInput } = (data as any)
-    const beer = await prisma.beer.create({ data: { ...beerInput, isGuest: !!data.isGuest } })
+    const beer = await prisma.beer.create({ data: { ...beerInput, isGuest: !!data.isGuest, glutenFree: !!data.glutenFree, vegan: !!data.vegan, alcoholFree: !!data.alcoholFree } })
 
     if (prefillPrices !== false) {
       const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } })
@@ -76,7 +79,18 @@ export async function registerBeerRoutes(app: FastifyInstance) {
     const id = Number((req.params as any).id)
     const data = BeerUpdate.parse((req as any).body)
     try {
+      // Remember previous badge to optionally clean up
+      const prev = await prisma.beer.findUnique({ where: { id }, select: { badgeAssetId: true } })
+      const prevBadgeId = prev?.badgeAssetId ?? null
       const updated = await prisma.beer.update({ where: { id }, data })
+      // If badge changed or was removed, and the old asset is unused elsewhere, delete it
+      if (prevBadgeId && prevBadgeId !== (updated as any).badgeAssetId) {
+        const usedByBeer = await prisma.beer.count({ where: { badgeAssetId: prevBadgeId } })
+        const usedInSettings = await prisma.globalSettings.count({ where: { OR: [ { logoAssetId: prevBadgeId }, { backgroundAssetId: prevBadgeId } ] } })
+        if (usedByBeer === 0 && usedInSettings === 0) {
+          await prisma.asset.delete({ where: { id: prevBadgeId } }).catch(()=>{})
+        }
+      }
       emitChange('beers')
       return updated
     } catch (e) {

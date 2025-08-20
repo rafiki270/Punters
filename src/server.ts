@@ -131,8 +131,22 @@ async function buildServer() {
 
   // Socket.IO
   const io = new IOServer(app.server, { cors: { origin: true } });
+  // Global sync state (memory-only)
+  let cycleOffset = 0;
+  let anchorMs: number | null = null; // if set, cycles derive from (epoch - anchorMs)
   io.on('connection', (socket) => {
     app.log.info({ id: socket.id }, 'socket connected');
+    // Send current sync state to new connections
+    socket.emit('sync_state', { cycleOffset, anchorMs });
+    // Allow clients (admin UI) to synchronize now or advance page globally
+    socket.on('sync_now', () => {
+      anchorMs = Date.now();
+      io.emit('sync_state', { cycleOffset, anchorMs });
+    });
+    socket.on('next_page', () => {
+      cycleOffset += 1;
+      io.emit('sync_state', { cycleOffset, anchorMs });
+    });
     socket.on('disconnect', () => app.log.info({ id: socket.id }, 'socket disconnected'));
   });
 
