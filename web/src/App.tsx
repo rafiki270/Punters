@@ -96,16 +96,34 @@ function Display() {
   // Screen sync params read once (allow adjustments via UI which update URL)
   const initialScreenIndex = useMemo(() => {
     const sp = new URLSearchParams(window.location.search)
-    const v = Number(sp.get('screenIndex') || '')
-    return Number.isFinite(v) && v > 0 ? v : 1
+    let v = Number(sp.get('screenIndex') || '')
+    if (!Number.isFinite(v) || v <= 0) {
+      const ls = Number(localStorage.getItem('screenIndex') || '')
+      v = Number.isFinite(ls) && ls > 0 ? ls : 1
+    }
+    return v
   }, [])
   const initialScreenCount = useMemo(() => {
     const sp = new URLSearchParams(window.location.search)
-    const v = Number(sp.get('screenCount') || '')
-    return Number.isFinite(v) && v > 0 ? v : 1
+    let v = Number(sp.get('screenCount') || '')
+    if (!Number.isFinite(v) || v <= 0) {
+      const ls = Number(localStorage.getItem('screenCount') || '')
+      v = Number.isFinite(ls) && ls > 0 ? ls : 1
+    }
+    return v
   }, [])
   const [screenIndexParam, setScreenIndexParam] = useState<number>(initialScreenIndex)
   const [screenCountParam, setScreenCountParam] = useState<number>(initialScreenCount)
+
+  useEffect(() => {
+    if (screenIndexParam > 1) localStorage.setItem('screenIndex', String(screenIndexParam))
+    else localStorage.removeItem('screenIndex')
+  }, [screenIndexParam])
+
+  useEffect(() => {
+    if (screenCountParam > 1) localStorage.setItem('screenCount', String(screenCountParam))
+    else localStorage.removeItem('screenCount')
+  }, [screenCountParam])
 
   useEffect(() => {
     const onFullscreenChange = () => {
