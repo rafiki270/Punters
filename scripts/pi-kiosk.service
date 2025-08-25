@@ -1,0 +1,14 @@
+[Unit]
+Description=Punters server and Chromium kiosk
+After=network.target graphical.target
+
+[Service]
+Type=simple
+User=pi
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStart=/usr/bin/bash /opt/punters/scripts/pi-kiosk.sh
+Restart=always
+
+[Install]
+WantedBy=graphical.target
