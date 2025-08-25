@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 HOST_PORT ?= 80
 
-.PHONY: help install dev dev-web build start prisma-generate prisma-migrate db-seed docker-build docker-up docker-down docker-logs launch launch80 check-api docker-toggle docker-publish-latest docker-release
+.PHONY: help install dev dev-web build start kioskpi prisma-generate prisma-migrate db-seed docker-build docker-up docker-down docker-logs launch launch80 check-api docker-toggle docker-publish-latest docker-release
 
 .DEFAULT_GOAL := help
 
@@ -33,6 +33,9 @@ build: ## Build web and server
 
 start: ## Start built server (serves built web)
 	npm start
+
+kioskpi: ## Run server and Chromium in kiosk mode on Raspberry Pi
+	./scripts/pi-kiosk.sh
 
 docker-build: ## Build Docker images (Compose, bridged profile)
 	docker compose --profile bridged build
