@@ -92,6 +92,7 @@ Factory reset
 - Run `make help` to list available commands.
 - `make launch` — one-shot dev: installs dependencies (unless `SKIP_INSTALL=1`), prepares DB (generate/migrate/seed), then starts web (5173) + server (3000).
   - Prints detected LAN IPs so you can open `http://<ip>:5173/` from other devices.
+- `make launch80` — same as `launch` but serves the web app on port 80 instead of 5173.
 - `make install` — install dependencies
 - `make prisma-generate` — generate Prisma client
 - `make prisma-migrate` — run migrations (dev)
