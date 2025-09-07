@@ -541,15 +541,23 @@ function Display() {
                   </div>
                   <div className="text-right">
                     {(() => {
-                      const prices = (row.beer.prices || []).slice()
+                      // Ignore prices that are zero or missing
+                      const prices = (row.beer.prices || [])
+                        .filter(p => (p.amountMinor ?? 0) > 0)
+                        .slice()
                       const defId = settings?.defaultSizeId ?? null
                       // sort by size volume descending, fallback to displayOrder
-                      prices.sort((a,b) => ((b.size?.volumeMl ?? 0) - (a.size?.volumeMl ?? 0)) || ((b.size?.displayOrder ?? 0) - (a.size?.displayOrder ?? 0)))
-                      let defIdx = defId ? prices.findIndex(p=>p.serveSizeId===defId) : -1
+                      prices.sort(
+                        (a, b) =>
+                          ((b.size?.volumeMl ?? 0) - (a.size?.volumeMl ?? 0)) ||
+                          ((b.size?.displayOrder ?? 0) - (a.size?.displayOrder ?? 0))
+                      )
+                      // If the configured default size is missing, fall back to the first available
+                      let defIdx = defId ? prices.findIndex(p => p.serveSizeId === defId) : -1
                       if (defIdx === -1 && prices.length) defIdx = 0
                       const items = prices.map((p, idx) => ({ p, isDefault: idx === defIdx }))
                       // move default to first
-                      items.sort((a,b) => (a.isDefault === b.isDefault) ? 0 : (a.isDefault ? -1 : 1))
+                      items.sort((a, b) => (a.isDefault === b.isDefault ? 0 : a.isDefault ? -1 : 1))
                       return (
                         <div className="flex flex-col items-end gap-0.5">
                           {items.map(({p,isDefault},i) => (
