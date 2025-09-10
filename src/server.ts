@@ -17,6 +17,7 @@ import { registerDisplayRoutes } from './routes/display';
 import { registerNetworkRoutes } from './routes/network';
 import { registerBackupRoutes } from './routes/backup';
 import { onChange } from './events';
+import { registerDrinkRoutes } from './routes/drinks';
 import { startDiscovery, getDiscovered, suggestUniqueName } from './discovery';
 import { prisma } from './db';
 import cookie from '@fastify/cookie';
@@ -55,6 +56,7 @@ async function buildServer() {
   await registerSettingsRoutes(app);
   await registerSizeRoutes(app);
   await registerBeerRoutes(app);
+  await registerDrinkRoutes(app);
   await registerTapRoutes(app);
   await registerI18nRoutes(app);
   await registerMediaRoutes(app);

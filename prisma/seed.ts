@@ -61,6 +61,20 @@ async function main() {
       mode: 'server'
     }
   });
+
+  // Seed basic drink categories
+  const baseDrinkCategories = [
+    { name: 'Spirits', displayOrder: 1 },
+    { name: 'Wine', displayOrder: 2 },
+    { name: 'Soft Drinks', displayOrder: 3 },
+  ]
+  for (const c of baseDrinkCategories) {
+    await prisma.drinkCategory.upsert({
+      where: { name: c.name },
+      update: { displayOrder: c.displayOrder, active: true },
+      create: c as any,
+    } as any)
+  }
 }
 
 main()

@@ -64,7 +64,7 @@ export async function registerBeerRoutes(app: FastifyInstance) {
     if (prefillPrices !== false) {
       const settings = await prisma.globalSettings.findUnique({ where: { id: 1 } })
       const currency = settings?.currency || 'GBP'
-      const defaults = await prisma.defaultPrice.findMany({ where: { isGuest: beer.isGuest } })
+      const defaults = await prisma.defaultPrice.findMany({ where: { isGuest: beer.isGuest, serveSize: { forBeers: true } } })
       if (defaults.length) {
         const entries = defaults.map((d: any) => ({ beerId: beer.id, serveSizeId: d.serveSizeId, amountMinor: d.amountMinor, currency }))
         await prisma.price.createMany({ data: entries })

@@ -52,8 +52,11 @@ model ServeSize {
   name         String  @unique
   volumeMl     Int
   displayOrder Int     @default(0)
+  forBeers     Boolean @default(true)
+  forDrinks    Boolean @default(true)
   prices       Price[]
   defaultPrices DefaultPrice[]
+  drinkPrices  DrinkPrice[]
 }
 
 model Beer {
@@ -168,4 +171,42 @@ model DefaultPrice {
   isGuest     Boolean   @default(false)
 
   @@unique([serveSizeId, isGuest])
+}
+
+// Other Drinks: flat categories, drinks, and prices (reuse ServeSize)
+model DrinkCategory {
+  id           Int     @id @default(autoincrement())
+  name         String  @unique
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+  drinks       Drink[]
+}
+
+model Drink {
+  id           Int            @id @default(autoincrement())
+  category     DrinkCategory  @relation(fields: [categoryId], references: [id])
+  categoryId   Int
+  name         String
+  producer     String?
+  style        String?
+  abv          Float?
+  origin       String?
+  description  String?
+  active       Boolean        @default(true)
+  displayOrder Int            @default(0)
+  prices       DrinkPrice[]
+
+  @@unique([categoryId, name])
+}
+
+model DrinkPrice {
+  id          Int       @id @default(autoincrement())
+  amountMinor Int
+  currency    String
+  drink       Drink     @relation(fields: [drinkId], references: [id])
+  drinkId     Int
+  size        ServeSize @relation(fields: [serveSizeId], references: [id])
+  serveSizeId Int
+
+  @@unique([drinkId, serveSizeId])
 }
