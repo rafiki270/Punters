@@ -86,7 +86,12 @@ export async function registerDrinkRoutes(app: FastifyInstance) {
     const where: any = {}
     if (q.active != null) where.active = q.active === 'true'
     if (q.categoryId != null) where.categoryId = Number(q.categoryId)
-    return prisma.drink.findMany({ where, orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }] })
+    const withPrices = String(q.withPrices || '').toLowerCase() === 'true'
+    return prisma.drink.findMany({
+      where,
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+      include: withPrices ? { prices: { include: { size: true } } } : undefined as any,
+    })
   })
 
   app.get('/api/drinks/:id', async (req, reply) => {

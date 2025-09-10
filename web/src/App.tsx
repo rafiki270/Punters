@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { io, Socket } from 'socket.io-client'
 
-type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean }
+type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'drinks'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean }
 type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number; volumeMl?: number } }
 type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[]; colorHex?: string|null }
 type TapBeer = { tapNumber: number; status: string; beer: Beer|null }
 type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; displayOrder?: number }
 type Size = { id: number; name: string; volumeMl: number; displayOrder: number; forBeers?: boolean; forDrinks?: boolean }
 type Discovered = { name: string; host: string; port: number; addresses: string[] }
-type Device = { id:number; name:string; displayMode:'inherit'|'all'|'beer'|'ads'; beerColumns:number; itemsPerColumn:number; cellScale?:number|null; columnGap?:number|null; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right' | null; logoScale?: number|null; bgPosition?: 'center'|'top'|'bottom'|'left'|'right' | null; bgScale?: number|null }
+type Device = { id:number; name:string; displayMode:'inherit'|'all'|'beer'|'drinks'|'ads'; beerColumns:number; itemsPerColumn:number; cellScale?:number|null; columnGap?:number|null; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right' | null; logoScale?: number|null; bgPosition?: 'center'|'top'|'bottom'|'left'|'right' | null; bgScale?: number|null }
 
 // Simple overlay that auto-hides the controls when idle
 function useAutoHide(delayMs: number) {
@@ -75,11 +75,16 @@ function Display() {
   const [showInfo, setShowInfo] = useState(false)
   const controlsVisible = useAutoHide(10000)
   const [sizes, setSizes] = useState<Size[]>([])
+  const [drinkCategories, setDrinkCategories] = useState<any[]>([])
+  const [drinks, setDrinks] = useState<any[]>([])
   const [mode, setMode] = useState<'server'|'client'>('server')
   const [servers, setServers] = useState<Discovered[]>([])
   const [remoteBase, setRemoteBase] = useState<string | null>(null)
   const [device, setDevice] = useState<Device | null>(null)
-  const [localDisplayMode, setLocalDisplayMode] = useState<'all'|'beer'|'ads'>(()=> (localStorage.getItem('localDisplayMode') as any) || 'all')
+  const [localDisplayMode, setLocalDisplayMode] = useState<'all'|'beer'|'drinks'|'ads'>(()=> (localStorage.getItem('localDisplayMode') as any) || 'all')
+  const [localShowDrinks, setLocalShowDrinks] = useState<boolean>(()=> {
+    const v = localStorage.getItem('localShowDrinks'); return v == null ? true : v === 'true'
+  })
   const [isFullscreen, setIsFullscreen] = useState(false)
   // state for screen sync panel
   const [showSync, setShowSync] = useState(false)
@@ -170,16 +175,20 @@ function Display() {
       }
 
       const base = (m.mode === 'client' && (localStorage.getItem('remoteServer'))) ? localStorage.getItem('remoteServer')! : ''
-      const [s, sz, bl, aa] = await Promise.all([
+      const [s, sz, bl, aa, cats, drs] = await Promise.all([
         fetch(`${base}/api/settings`).then(r=>r.json()),
         fetch(`${base}/api/sizes`).then(r=>r.json()).catch(()=>[]),
         fetch(`${base}/api/display/beerlist`).then(r=>r.json()),
         fetch(`${base}/api/display/ads`).then(r=>r.json()),
+        fetch(`${base}/api/drink-categories`).then(r=>r.json()).catch(()=>[]),
+        fetch(`${base}/api/drinks?active=true&withPrices=true`).then(r=>r.json()).catch(()=>[]),
       ])
       setSettings(s)
       setSizes(sz)
       setTaps(bl)
       setAds(aa)
+      setDrinkCategories(cats)
+      setDrinks(drs)
       // Resolve device if specified
       if (deviceId != null) {
         const list: Device[] = await fetch(`${base}/api/devices`).then(r=>r.json()).catch(()=>[])
@@ -256,9 +265,24 @@ function Display() {
   }, [tapBeers, columns, itemsPerColumn, device?.itemsPerColumn, settings?.itemsPerPage])
 
   const slides = useMemo(() => {
-    type Slide = { type: 'beer'|'ad'|'adpair'; data: any }
+    type Slide = { type: 'beer'|'drinks'|'ad'|'adpair'; data: any }
     const s: Slide[] = []
     beerPages.forEach(pg => s.push({ type: 'beer', data: pg }))
+    // Drinks slide: one page grouped by category (if enabled)
+    const hasDrinks = Array.isArray(drinks) && drinks.some((d:any)=>d && d.active!==false)
+    const allowDrinks = (device && device.displayMode !== 'inherit')
+      ? (device.displayMode === 'drinks' || device.displayMode === 'all')
+      : (localDisplayMode !== 'ads' && localShowDrinks)
+    if (hasDrinks && allowDrinks) {
+      // Build grouped data: [{ categoryName, drinks: Drink[] }]
+      const cats = (drinkCategories || []).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name)))
+      const grouped = cats.map((c:any)=> ({
+        id: c.id,
+        name: c.name,
+        drinks: (drinks || []).filter((d:any)=> d.categoryId===c.id && d.active!==false).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name)))
+      })).filter((g:any)=> g.drinks.length>0)
+      if (grouped.length) s.push({ type: 'drinks', data: grouped })
+    }
     // Sort ads by displayOrder then created order
     const adsSorted = ads.slice().sort((a,b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
     for (let i = 0; i < adsSorted.length; i++) {
@@ -275,12 +299,17 @@ function Display() {
       s.push({ type: 'ad', data: a })
     }
     // Determine effective mode
-    let modeEff: 'all'|'beer'|'ads' = 'all'
+    let modeEff: 'all'|'beer'|'drinks'|'ads' = 'all'
     if (device && device.displayMode !== 'inherit') modeEff = device.displayMode
     else modeEff = localDisplayMode
-    const filtered = s.filter(sl => modeEff === 'all' ? true : (modeEff === 'beer' ? sl.type==='beer' : (sl.type==='ad' || sl.type==='adpair')))
+    const filtered = s.filter(sl => {
+      if (modeEff === 'all') return true
+      if (modeEff === 'beer') return sl.type==='beer' || (localShowDrinks && sl.type==='drinks')
+      if (modeEff === 'drinks') return sl.type==='drinks'
+      return (sl.type==='ad' || sl.type==='adpair')
+    })
     return filtered.length ? filtered : [{ type: 'beer', data: [] }]
-  }, [beerPages, ads])
+  }, [beerPages, ads, drinks, drinkCategories, localDisplayMode, localShowDrinks, device?.displayMode])
 
   // Derive synchronized page index when enabled
   const rotation = settings?.rotationSec ?? 90
@@ -465,6 +494,8 @@ function Display() {
           onSelectServer={(url)=>{ localStorage.setItem('remoteServer', url); setRemoteBase(url); loadAll() }}
           localDisplayMode={localDisplayMode}
           setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }}
+          localShowDrinks={localShowDrinks}
+          setLocalShowDrinks={(v)=>{ setLocalShowDrinks(v); localStorage.setItem('localShowDrinks', String(v)) }}
         
         />
       )}
@@ -597,6 +628,104 @@ function Display() {
             return <img src={`${contentBase}/api/assets/${ad.id}/content`} alt={ad.filename} className={cls} />
           })()}
         </div>
+      ) : cur.type==='drinks' ? (
+        <div className="px-6 py-6" style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem', paddingBottom: footPadPx }}>
+          {(() => {
+            const groups = cur.data as Array<{ id:number; name:string; drinks: any[] }>
+            const sizeMap = new Map<number, Size>()
+            sizes.forEach(s => sizeMap.set(s.id, s))
+
+            const colStyle: React.CSSProperties = {
+              columnCount: Math.max(1, columns),
+              columnGap: `${effColumnGap}px`,
+              height: '90vh',
+            }
+            const avoidBreak: React.CSSProperties = { breakInside: 'avoid', WebkitColumnBreakInside: 'avoid', pageBreakInside: 'avoid' } as any
+
+            return (
+              <div style={colStyle}>
+                {groups.map((g) => {
+                  const firstCount = Math.min(3, g.drinks.length)
+                  const firstChunk = g.drinks.slice(0, firstCount)
+                  const rest = g.drinks.slice(firstCount)
+                  return (
+                    <div key={`grpwrap-${g.id}`}>
+                      {/* Header + first 3 items are locked together */}
+                      <div style={avoidBreak} className="mb-2">
+                        <div className="text-3xl font-bold mb-2">{g.name}</div>
+                        {firstChunk.map((d:any) => (
+                          <div key={`itm-${g.id}-${d.id}`} className="mb-3 border-b border-neutral-800/40 pb-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-xl font-semibold truncate">{d.name}</div>
+                                {(() => {
+                                  const parts: string[] = []
+                                  if (d.producer) parts.push(String(d.producer))
+                                  if (d.style) parts.push(String(d.style))
+                                  if (d.origin) parts.push(String(d.origin))
+                                  if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
+                                  return parts.length ? <div className="text-xs opacity-80 truncate">{parts.join(' • ')}</div> : null
+                                })()}
+                                {d.description ? (
+                                  <div className="text-xs opacity-80 whitespace-pre-wrap mt-0.5">{d.description}</div>
+                                ) : null}
+                              </div>
+                              <div className="text-right whitespace-nowrap">
+                                {Array.isArray(d.prices) && d.prices
+                                  .filter((p:any)=> (p.amountMinor||0)>0 && sizeMap.get(p.serveSizeId)?.forDrinks !== false)
+                                  .sort((a:any,b:any)=> (sizeMap.get(a.serveSizeId)?.displayOrder||0) - (sizeMap.get(b.serveSizeId)?.displayOrder||0))
+                                  .map((p:any, pi:number) => (
+                                    <div key={`pr-${d.id}-${p.serveSizeId}-${pi}`} className="text-sm">
+                                      <span className="opacity-70">{sizeMap.get(p.serveSizeId)?.name}</span>
+                                      <span className="mx-1">-</span>
+                                      <span className="font-semibold">{formatMoney(p.amountMinor, p.currency)}</span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Remaining items can break individually */}
+                      {rest.map((d:any) => (
+                        <div key={`itm-rest-${g.id}-${d.id}`} style={avoidBreak} className="mb-3 border-b border-neutral-800/40 pb-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-xl font-semibold truncate">{d.name}</div>
+                              {(() => {
+                                const parts: string[] = []
+                                if (d.producer) parts.push(String(d.producer))
+                                if (d.style) parts.push(String(d.style))
+                                if (d.origin) parts.push(String(d.origin))
+                                if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
+                                return parts.length ? <div className="text-xs opacity-80 truncate">{parts.join(' • ')}</div> : null
+                              })()}
+                              {d.description ? (
+                                <div className="text-xs opacity-80 whitespace-pre-wrap mt-0.5">{d.description}</div>
+                              ) : null}
+                            </div>
+                            <div className="text-right whitespace-nowrap">
+                              {Array.isArray(d.prices) && d.prices
+                                .filter((p:any)=> (p.amountMinor||0)>0 && sizeMap.get(p.serveSizeId)?.forDrinks !== false)
+                                .sort((a:any,b:any)=> (sizeMap.get(a.serveSizeId)?.displayOrder||0) - (sizeMap.get(b.serveSizeId)?.displayOrder||0))
+                                .map((p:any, pi:number) => (
+                                  <div key={`pr-${d.id}-${p.serveSizeId}-${pi}`} className="text-sm">
+                                    <span className="opacity-70">{sizeMap.get(p.serveSizeId)?.name}</span>
+                                    <span className="mx-1">-</span>
+                                    <span className="font-semibold">{formatMoney(p.amountMinor, p.currency)}</span>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </div>
       ) : (
         <div className="h-full w-full grid grid-cols-2 gap-4 items-center justify-center" style={{ 
           paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem',
@@ -636,7 +765,7 @@ export default function App() {
 }
 
 // ----- Admin Overlay Components -----
-function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage }: { isOpen: boolean; sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'ads')=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void }) {
+function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localShowDrinks, setLocalShowDrinks, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage }: { isOpen: boolean; sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'drinks'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'drinks'|'ads')=>void; localShowDrinks: boolean; setLocalShowDrinks: (v:boolean)=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void }) {
   const [uiMode, setUiMode] = useState<'server'|'client'>(mode)
   const tabs: Array<{key: string; label: string}> = [
     { key: 'settings', label: 'Settings' },
@@ -687,7 +816,7 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
             </div>
             <button onClick={onClose} className="px-3 py-1.5 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Close</button>
           </div>
-        {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={async()=>{ await onRefresh(); setUiMode((await fetch('/api/mode').then(r=>r.json()).catch(()=>({mode}))).mode) }} localDisplayMode={localDisplayMode} setLocalDisplayMode={setLocalDisplayMode} servers={servers} remoteBase={remoteBase} onSelectServer={onSelectServer} onLocalModeChange={(m)=>{ setUiMode(m); }} />}
+        {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={async()=>{ await onRefresh(); setUiMode((await fetch('/api/mode').then(r=>r.json()).catch(()=>({mode}))).mode) }} localDisplayMode={localDisplayMode} setLocalDisplayMode={setLocalDisplayMode} localShowDrinks={localShowDrinks} setLocalShowDrinks={setLocalShowDrinks} servers={servers} remoteBase={remoteBase} onSelectServer={onSelectServer} onLocalModeChange={(m)=>{ setUiMode(m); }} />}
         {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={onRefresh} />}
@@ -708,7 +837,8 @@ function AdminPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [servers, setServers] = useState<Discovered[]>([])
   const [remoteBase, setRemoteBase] = useState<string | null>(null)
-  const [localDisplayMode, setLocalDisplayMode] = useState<'all'|'beer'|'ads'>(()=> (localStorage.getItem('localDisplayMode') as any) || 'all')
+  const [localDisplayMode, setLocalDisplayMode] = useState<'all'|'beer'|'drinks'|'ads'>(()=> (localStorage.getItem('localDisplayMode') as any) || 'all')
+  const [localShowDrinks, setLocalShowDrinks] = useState<boolean>(()=> { const v=localStorage.getItem('localShowDrinks'); return v==null?true:v==='true' })
 
   const [tab, setTab] = useState<string>(() => {
     const saved = typeof window !== 'undefined' ? sessionStorage.getItem('adminLastTab') : null
@@ -729,12 +859,16 @@ function AdminPage() {
         if (saved) setRemoteBase(saved)
       }
       const base = (modeNow === 'client' && (localStorage.getItem('remoteServer'))) ? localStorage.getItem('remoteServer')! : ''
-      const [s, sz] = await Promise.all([
+      const [s, sz, cats, drs] = await Promise.all([
         fetch(`${base}/api/settings`).then(r=>r.json()),
         fetch(`${base}/api/sizes`).then(r=>r.json()).catch(()=>[]),
+        fetch(`${base}/api/drink-categories`).then(r=>r.json()).catch(()=>[]),
+        fetch(`${base}/api/drinks?active=true`).then(r=>r.json()).catch(()=>[]),
       ])
       setSettings(s)
       setSizes(sz)
+      setDrinkCategories(cats)
+      setDrinks(drs)
     } catch {}
   }
   useEffect(() => { loadAll() }, [])
@@ -761,7 +895,7 @@ function AdminPage() {
           ))}
         </div>
       </div>
-      {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={loadAll} localDisplayMode={localDisplayMode} setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }} servers={servers} remoteBase={remoteBase} onSelectServer={(url)=>{ localStorage.setItem('remoteServer', url); setRemoteBase(url); loadAll() }} onLocalModeChange={(m)=>{ setUiMode(m) }} />}
+      {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={loadAll} localDisplayMode={localDisplayMode} setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }} localShowDrinks={localShowDrinks} setLocalShowDrinks={(v)=>{ setLocalShowDrinks(v); localStorage.setItem('localShowDrinks', String(v)) }} servers={servers} remoteBase={remoteBase} onSelectServer={(url)=>{ localStorage.setItem('remoteServer', url); setRemoteBase(url); loadAll() }} onLocalModeChange={(m)=>{ setUiMode(m) }} />}
       {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={loadAll} />}
@@ -1042,7 +1176,7 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
   )
 }
 
-function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalDisplayMode, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage, servers, remoteBase, onSelectServer, onLocalModeChange }: { sizes: Size[]; settings: Settings|null; onRefresh: () => void; localDisplayMode: 'all'|'beer'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'ads')=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; onLocalModeChange: (m:'server'|'client')=>void }) {
+function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalDisplayMode, localShowDrinks, setLocalShowDrinks, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage, servers, remoteBase, onSelectServer, onLocalModeChange }: { sizes: Size[]; settings: Settings|null; onRefresh: () => void; localDisplayMode: 'all'|'beer'|'drinks'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'drinks'|'ads')=>void; localShowDrinks: boolean; setLocalShowDrinks: (v:boolean)=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; onLocalModeChange: (m:'server'|'client')=>void }) {
   const [rotation, setRotation] = useState<number>(settings?.rotationSec ?? 90)
   const [defaultSizeId, setDefaultSizeId] = useState<number | ''>(settings?.defaultSizeId ?? '')
   const [modeSel, setModeSel] = useState<'server'|'client'>(settings?.mode as any || 'server')
@@ -1142,7 +1276,7 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
         </div>
       )}
       <div>
-        <label className="block text-sm mb-1">Local Display Content</label>
+        <label className="block text-sm mb-1">Display content</label>
         <div className="flex items-center gap-3 text-sm">
           <label className="flex items-center gap-1">
             <input
@@ -1155,8 +1289,8 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
           <label className="flex items-center gap-1">
             <input
               type="checkbox"
-              checked={localDisplayMode !== 'ads'}
-              onChange={(e)=> setLocalDisplayMode(e.target.checked ? (localDisplayMode==='ads'?'all':'beer') : 'ads')}
+              checked={!!localShowDrinks}
+              onChange={(e)=> setLocalShowDrinks(e.target.checked)}
             />
             Drinks
           </label>
@@ -1871,6 +2005,7 @@ function DevicesPanel({ onRefresh }: { onRefresh: () => void }) {
                 <option value="inherit">Inherit</option>
                 <option value="all">All</option>
                 <option value="beer">Beers only</option>
+                <option value="drinks">Drinks only</option>
                 <option value="ads">Media only</option>
               </select>
             </label>
