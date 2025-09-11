@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 
 type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'drinks'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean }
@@ -85,6 +85,35 @@ function Display() {
   const [localShowDrinks, setLocalShowDrinks] = useState<boolean>(()=> {
     const v = localStorage.getItem('localShowDrinks'); return v == null ? true : v === 'true'
   })
+  const [localBeerItemsPerCol, setLocalBeerItemsPerCol] = useState<number>(()=>{
+    const v = Number(localStorage.getItem('beerItemsPerCol')||'');
+    return Number.isFinite(v) && v>0 ? v : 10
+  })
+  const [localDrinksCellScale, setLocalDrinksCellScale] = useState<number>(()=>{
+    const v = Number(localStorage.getItem('drinksCellScale')||'');
+    return Number.isFinite(v) ? v : 50
+  })
+  const [localDrinksItemsPerCol, setLocalDrinksItemsPerCol] = useState<number>(()=>{
+    const v = Number(localStorage.getItem('drinksItemsPerCol')||'');
+    return Number.isFinite(v) && v>0 ? v : 10
+  })
+  const [localDrinksIndentPct, setDrinksIndentPctDisplay] = useState<number>(()=>{
+    const v = Number(localStorage.getItem('drinksIndentPct')||'');
+    if (Number.isFinite(v)) return Math.max(0, Math.min(30, v))
+    // fallback default if not set
+    return 10
+  })
+  const updateDrinksIndentPct = useCallback((n:number) => {
+    const clamped = Math.max(0, Math.min(30, n))
+    setDrinksIndentPctDisplay(clamped)
+    try { localStorage.setItem('drinksIndentPct', String(clamped)) } catch {}
+  }, [])
+  // Persist local display prefs whenever they change (belt-and-braces)
+  useEffect(()=>{ try { localStorage.setItem('beerItemsPerCol', String(localBeerItemsPerCol)) } catch {} }, [localBeerItemsPerCol])
+  useEffect(()=>{ try { localStorage.setItem('drinksItemsPerCol', String(localDrinksItemsPerCol)) } catch {} }, [localDrinksItemsPerCol])
+  useEffect(()=>{ try { localStorage.setItem('drinksCellScale', String(localDrinksCellScale)) } catch {} }, [localDrinksCellScale])
+  // persist indent percentage
+  useEffect(()=>{ try { localStorage.setItem('drinksIndentPct', String(localDrinksIndentPct)) } catch {} }, [localDrinksIndentPct])
   const [isFullscreen, setIsFullscreen] = useState(false)
   // state for screen sync panel
   const [showSync, setShowSync] = useState(false)
@@ -208,7 +237,17 @@ function Display() {
   // Live updates: listen for server change events and reload
   useEffect(() => {
     let url: string | undefined = undefined
-    if (mode === 'client' && remoteBase) url = remoteBase
+    if (mode === 'client' && remoteBase) {
+      url = remoteBase
+    } else {
+      try {
+        const loc = window.location
+        // If running from Vite dev server (e.g., :5173), point socket to backend :3000
+        if (loc.port && loc.port !== '3000') {
+          url = `${loc.protocol}//${loc.hostname}:3000`
+        }
+      } catch {}
+    }
     const sock: Socket = io(url, { transports: ['websocket'], reconnection: true })
     const onChanged = () => { loadAll() }
     const onTick = (p: { epoch: number }) => { try { setEpoch(p.epoch) } catch {} }
@@ -258,30 +297,39 @@ function Display() {
 
   // Build slides: beer pages then each ad image
   const beerPages: Array<Array<{ tapNumber: number; status: string; beer: Beer }>> = useMemo(() => {
-    const perPage = device?.itemsPerColumn ? (columns * itemsPerColumn) : (settings?.itemsPerPage || 10)
+    const perCol = device?.itemsPerColumn || localBeerItemsPerCol
+    const perPage = Math.max(1, columns) * Math.max(1, perCol)
     const pages: Array<Array<{ tapNumber: number; status: string; beer: Beer }>> = []
     for (let i = 0; i < tapBeers.length; i += perPage) pages.push(tapBeers.slice(i, i + perPage))
     return pages.length ? pages : [[]]
-  }, [tapBeers, columns, itemsPerColumn, device?.itemsPerColumn, settings?.itemsPerPage])
+  }, [tapBeers, columns, itemsPerColumn, device?.itemsPerColumn, localBeerItemsPerCol])
 
   const slides = useMemo(() => {
     type Slide = { type: 'beer'|'drinks'|'ad'|'adpair'; data: any }
     const s: Slide[] = []
     beerPages.forEach(pg => s.push({ type: 'beer', data: pg }))
-    // Drinks slide: one page grouped by category (if enabled)
+    // Drinks slide(s): grouped by category, manual items per column
     const hasDrinks = Array.isArray(drinks) && drinks.some((d:any)=>d && d.active!==false)
     const allowDrinks = (device && device.displayMode !== 'inherit')
       ? (device.displayMode === 'drinks' || device.displayMode === 'all')
       : (localDisplayMode !== 'ads' && localShowDrinks)
     if (hasDrinks && allowDrinks) {
-      // Build grouped data: [{ categoryName, drinks: Drink[] }]
       const cats = (drinkCategories || []).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name)))
-      const grouped = cats.map((c:any)=> ({
-        id: c.id,
-        name: c.name,
-        drinks: (drinks || []).filter((d:any)=> d.categoryId===c.id && d.active!==false).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name)))
-      })).filter((g:any)=> g.drinks.length>0)
-      if (grouped.length) s.push({ type: 'drinks', data: grouped })
+      const grouped = cats.map((c:any)=> ({ id:c.id, name:c.name, drinks: (drinks || []).filter((d:any)=> d.categoryId===c.id && d.active!==false).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name))) })).filter((g:any)=> g.drinks.length>0)
+      type Entry = { kind:'header'; name:string } | { kind:'item'; drink:any }
+      const entries: Entry[] = []
+      grouped.forEach(g => { entries.push({ kind:'header', name:g.name }); g.drinks.forEach((d:any)=> entries.push({ kind:'item', drink:d })) })
+      const perCol = Math.max(1, localDrinksItemsPerCol)
+      const colCount = Math.max(1, columns)
+      const perPage = perCol * colCount
+      for (let i=0; i<entries.length; i+=perPage) {
+        const pageEntries = entries.slice(i, i+perPage)
+        const columnsData: Entry[][] = []
+        for (let c=0;c<colCount;c++) {
+          columnsData.push(pageEntries.slice(c*perCol, (c+1)*perCol))
+        }
+        s.push({ type:'drinks', data: { columns: columnsData } })
+      }
     }
     // Sort ads by displayOrder then created order
     const adsSorted = ads.slice().sort((a,b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
@@ -309,7 +357,7 @@ function Display() {
       return (sl.type==='ad' || sl.type==='adpair')
     })
     return filtered.length ? filtered : [{ type: 'beer', data: [] }]
-  }, [beerPages, ads, drinks, drinkCategories, localDisplayMode, localShowDrinks, device?.displayMode])
+  }, [beerPages, ads, drinks, drinkCategories, localDisplayMode, localShowDrinks, device?.displayMode, columns, localDrinksItemsPerCol])
 
   // Derive synchronized page index when enabled
   const rotation = settings?.rotationSec ?? 90
@@ -432,6 +480,8 @@ function Display() {
         </button>
       </div>
 
+      
+
       {/* Info overlay (manual) */}
       {showInfo && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center text-neutral-900 dark:text-neutral-100" onClick={()=>setShowInfo(false)}>
@@ -496,6 +546,14 @@ function Display() {
           setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }}
           localShowDrinks={localShowDrinks}
           setLocalShowDrinks={(v)=>{ setLocalShowDrinks(v); localStorage.setItem('localShowDrinks', String(v)) }}
+          localDrinksCellScale={localDrinksCellScale}
+          setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }}
+          localDrinksItemsPerCol={localDrinksItemsPerCol}
+          setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }}
+          localBeerItemsPerCol={localBeerItemsPerCol}
+          setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }}
+          localDrinksIndentPct={localDrinksIndentPct}
+          setLocalDrinksIndentPct={updateDrinksIndentPct}
         
         />
       )}
@@ -629,99 +687,52 @@ function Display() {
           })()}
         </div>
       ) : cur.type==='drinks' ? (
-        <div className="px-6 py-6" style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem', paddingBottom: footPadPx }}>
+        <div className="px-6 py-6 overflow-auto" style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem', paddingBottom: footPadPx }}>
           {(() => {
-            const groups = cur.data as Array<{ id:number; name:string; drinks: any[] }>
+            const page = cur.data as { columns: Array<Array<{ kind:'header'; name:string }|{ kind:'item'; drink:any }>> }
             const sizeMap = new Map<number, Size>()
             sizes.forEach(s => sizeMap.set(s.id, s))
-
-            const colStyle: React.CSSProperties = {
-              columnCount: Math.max(1, columns),
-              columnGap: `${effColumnGap}px`,
-              height: '90vh',
-            }
-            const avoidBreak: React.CSSProperties = { breakInside: 'avoid', WebkitColumnBreakInside: 'avoid', pageBreakInside: 'avoid' } as any
-
             return (
-              <div style={colStyle}>
-                {groups.map((g) => {
-                  const firstCount = Math.min(3, g.drinks.length)
-                  const firstChunk = g.drinks.slice(0, firstCount)
-                  const rest = g.drinks.slice(firstCount)
-                  return (
-                    <div key={`grpwrap-${g.id}`}>
-                      {/* Header + first 3 items are locked together */}
-                      <div style={avoidBreak} className="mb-2">
-                        <div className="text-3xl font-bold mb-2">{g.name}</div>
-                        {firstChunk.map((d:any) => (
-                          <div key={`itm-${g.id}-${d.id}`} className="mb-3 border-b border-neutral-800/40 pb-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-xl font-semibold truncate">{d.name}</div>
-                                {(() => {
-                                  const parts: string[] = []
-                                  if (d.producer) parts.push(String(d.producer))
-                                  if (d.style) parts.push(String(d.style))
-                                  if (d.origin) parts.push(String(d.origin))
-                                  if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
-                                  return parts.length ? <div className="text-xs opacity-80 truncate">{parts.join(' • ')}</div> : null
-                                })()}
-                                {d.description ? (
-                                  <div className="text-xs opacity-80 whitespace-pre-wrap mt-0.5">{d.description}</div>
-                                ) : null}
-                              </div>
-                              <div className="text-right whitespace-nowrap">
-                                {Array.isArray(d.prices) && d.prices
-                                  .filter((p:any)=> (p.amountMinor||0)>0 && sizeMap.get(p.serveSizeId)?.forDrinks !== false)
-                                  .sort((a:any,b:any)=> (sizeMap.get(a.serveSizeId)?.displayOrder||0) - (sizeMap.get(b.serveSizeId)?.displayOrder||0))
-                                  .map((p:any, pi:number) => (
-                                    <div key={`pr-${d.id}-${p.serveSizeId}-${pi}`} className="text-sm">
-                                      <span className="opacity-70">{sizeMap.get(p.serveSizeId)?.name}</span>
-                                      <span className="mx-1">-</span>
-                                      <span className="font-semibold">{formatMoney(p.amountMinor, p.currency)}</span>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
+              <div className="grid" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))`, columnGap: `${effColumnGap}px` }}>
+                {page.columns.map((col, ci) => (
+                  <div key={`col-${ci}`} className="space-y-2">
+                    {col.map((e, idx) => e.kind==='header' ? (
+                      <div key={`hdr-${ci}-${idx}`} className="font-bold mt-2" style={{ fontSize: Math.max(18, Math.round(30 * (localDrinksCellScale/50))) }}>{e.name}</div>
+                    ) : (
+                      <div key={`itm-${ci}-${idx}`} className="mb-3 border-b border-neutral-800/40 pb-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0" style={{ paddingLeft: `${localDrinksIndentPct}%` }}>
+                            <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (localDrinksCellScale/50))) }}>{e.drink.name}</div>
+                            {(() => {
+                              const d = e.drink
+                              const parts: string[] = []
+                              if (d.producer) parts.push(String(d.producer))
+                              if (d.style) parts.push(String(d.style))
+                              if (d.origin) parts.push(String(d.origin))
+                              if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
+                              return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
+                            })()}
+                            {e.drink.description ? (
+                              <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{e.drink.description}</div>
+                            ) : null}
                           </div>
-                        ))}
-                      </div>
-                      {/* Remaining items can break individually */}
-                      {rest.map((d:any) => (
-                        <div key={`itm-rest-${g.id}-${d.id}`} style={avoidBreak} className="mb-3 border-b border-neutral-800/40 pb-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-xl font-semibold truncate">{d.name}</div>
-                              {(() => {
-                                const parts: string[] = []
-                                if (d.producer) parts.push(String(d.producer))
-                                if (d.style) parts.push(String(d.style))
-                                if (d.origin) parts.push(String(d.origin))
-                                if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
-                                return parts.length ? <div className="text-xs opacity-80 truncate">{parts.join(' • ')}</div> : null
-                              })()}
-                              {d.description ? (
-                                <div className="text-xs opacity-80 whitespace-pre-wrap mt-0.5">{d.description}</div>
-                              ) : null}
-                            </div>
-                            <div className="text-right whitespace-nowrap">
-                              {Array.isArray(d.prices) && d.prices
-                                .filter((p:any)=> (p.amountMinor||0)>0 && sizeMap.get(p.serveSizeId)?.forDrinks !== false)
-                                .sort((a:any,b:any)=> (sizeMap.get(a.serveSizeId)?.displayOrder||0) - (sizeMap.get(b.serveSizeId)?.displayOrder||0))
-                                .map((p:any, pi:number) => (
-                                  <div key={`pr-${d.id}-${p.serveSizeId}-${pi}`} className="text-sm">
-                                    <span className="opacity-70">{sizeMap.get(p.serveSizeId)?.name}</span>
-                                    <span className="mx-1">-</span>
-                                    <span className="font-semibold">{formatMoney(p.amountMinor, p.currency)}</span>
-                                  </div>
-                                ))}
-                            </div>
+                          <div className="text-right whitespace-nowrap">
+                            {Array.isArray(e.drink.prices) && e.drink.prices
+                              .filter((p:any)=> (p.amountMinor||0)>0 && sizeMap.get(p.serveSizeId)?.forDrinks !== false)
+                              .sort((a:any,b:any)=> (sizeMap.get(a.serveSizeId)?.displayOrder||0) - (sizeMap.get(b.serveSizeId)?.displayOrder||0))
+                              .map((p:any, pi:number) => (
+                                <div key={`pr-${e.drink.id}-${p.serveSizeId}-${pi}`} style={{ fontSize: Math.max(10, Math.round(14 * (localDrinksCellScale/50))) }}>
+                                  <span className="opacity-70">{sizeMap.get(p.serveSizeId)?.name}</span>
+                                  <span className="mx-1">-</span>
+                                  <span className="font-semibold">{formatMoney(p.amountMinor, p.currency)}</span>
+                                </div>
+                              ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )
-                })}
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
             )
           })()}
@@ -765,7 +776,7 @@ export default function App() {
 }
 
 // ----- Admin Overlay Components -----
-function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localShowDrinks, setLocalShowDrinks, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage }: { isOpen: boolean; sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'drinks'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'drinks'|'ads')=>void; localShowDrinks: boolean; setLocalShowDrinks: (v:boolean)=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void }) {
+function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localShowDrinks, setLocalShowDrinks, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setLocalDrinksIndentPct }: { isOpen: boolean; sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'drinks'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'drinks'|'ads')=>void; localShowDrinks: boolean; setLocalShowDrinks: (v:boolean)=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setLocalDrinksIndentPct: (n:number)=>void }) {
   const [uiMode, setUiMode] = useState<'server'|'client'>(mode)
   const tabs: Array<{key: string; label: string}> = [
     { key: 'settings', label: 'Settings' },
@@ -816,8 +827,8 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
             </div>
             <button onClick={onClose} className="px-3 py-1.5 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Close</button>
           </div>
-        {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={async()=>{ await onRefresh(); setUiMode((await fetch('/api/mode').then(r=>r.json()).catch(()=>({mode}))).mode) }} localDisplayMode={localDisplayMode} setLocalDisplayMode={setLocalDisplayMode} localShowDrinks={localShowDrinks} setLocalShowDrinks={setLocalShowDrinks} servers={servers} remoteBase={remoteBase} onSelectServer={onSelectServer} onLocalModeChange={(m)=>{ setUiMode(m); }} />}
-        {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={onRefresh} />}
+        {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={async()=>{ await onRefresh(); setUiMode((await fetch('/api/mode').then(r=>r.json()).catch(()=>({mode}))).mode) }} localDisplayMode={localDisplayMode} setLocalDisplayMode={setLocalDisplayMode} localShowDrinks={localShowDrinks} setLocalShowDrinks={setLocalShowDrinks} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={setLocalDrinksCellScale} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={setLocalDrinksItemsPerCol} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={setLocalBeerItemsPerCol} servers={servers} remoteBase={remoteBase} onSelectServer={onSelectServer} onLocalModeChange={(m)=>{ setUiMode(m); }} />}
+        {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={onRefresh} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} localDrinksIndentPct={localDrinksIndentPct} setDrinksIndent={setLocalDrinksIndentPct} />}
         {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={onRefresh} />}
@@ -838,6 +849,10 @@ function AdminPage() {
   const [servers, setServers] = useState<Discovered[]>([])
   const [remoteBase, setRemoteBase] = useState<string | null>(null)
   const [localDisplayMode, setLocalDisplayMode] = useState<'all'|'beer'|'drinks'|'ads'>(()=> (localStorage.getItem('localDisplayMode') as any) || 'all')
+  const [localDrinksCellScale, setLocalDrinksCellScale] = useState<number>(()=>{ const v=Number(localStorage.getItem('drinksCellScale')||''); return Number.isFinite(v)?v:50 })
+  const [localDrinksItemsPerCol, setLocalDrinksItemsPerCol] = useState<number>(()=>{ const v=Number(localStorage.getItem('drinksItemsPerCol')||''); return Number.isFinite(v)&&v>0?v:10 })
+  const [localBeerItemsPerCol, setLocalBeerItemsPerCol] = useState<number>(()=>{ const v=Number(localStorage.getItem('beerItemsPerCol')||''); return Number.isFinite(v)&&v>0?v:10 })
+  const [adminDrinksIndentPct, setAdminDrinksIndentPct] = useState<number>(()=>{ const v=Number(localStorage.getItem('drinksIndentPct')||''); return Number.isFinite(v)?Math.max(0,Math.min(30,v)):10 })
   const [localShowDrinks, setLocalShowDrinks] = useState<boolean>(()=> { const v=localStorage.getItem('localShowDrinks'); return v==null?true:v==='true' })
 
   const [tab, setTab] = useState<string>(() => {
@@ -895,8 +910,8 @@ function AdminPage() {
           ))}
         </div>
       </div>
-      {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={loadAll} localDisplayMode={localDisplayMode} setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }} localShowDrinks={localShowDrinks} setLocalShowDrinks={(v)=>{ setLocalShowDrinks(v); localStorage.setItem('localShowDrinks', String(v)) }} servers={servers} remoteBase={remoteBase} onSelectServer={(url)=>{ localStorage.setItem('remoteServer', url); setRemoteBase(url); loadAll() }} onLocalModeChange={(m)=>{ setUiMode(m) }} />}
-      {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={loadAll} />}
+      {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={loadAll} localDisplayMode={localDisplayMode} setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }} localShowDrinks={localShowDrinks} setLocalShowDrinks={(v)=>{ setLocalShowDrinks(v); localStorage.setItem('localShowDrinks', String(v)) }} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} servers={servers} remoteBase={remoteBase} onSelectServer={(url)=>{ localStorage.setItem('remoteServer', url); setRemoteBase(url); loadAll() }} onLocalModeChange={(m)=>{ setUiMode(m) }} />}
+      {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={loadAll} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} localDrinksIndentPct={adminDrinksIndentPct} setDrinksIndent={(n)=>{ setAdminDrinksIndentPct(n); localStorage.setItem('drinksIndentPct', String(n)) }} />}
       {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={loadAll} />}
@@ -930,7 +945,7 @@ function ServerPanel({ servers, remoteBase, onSelectServer }: { servers: Discove
   )
 }
 
-function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefresh: () => void }) {
+function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setDrinksIndent }: { settings: Settings|null; onRefresh: () => void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setDrinksIndent: (n:number)=>void }) {
   const [theme, setTheme] = useState<'light'|'dark'>(settings?.themeMode || 'dark')
   const [logoPreview, setLogoPreview] = useState<string | null>(settings?.logoAssetId ? `/api/assets/${settings.logoAssetId}/content` : null)
   const [bgPreview, setBgPreview] = useState<string | null>(settings?.backgroundAssetId ? `/api/assets/${settings.backgroundAssetId}/content` : null)
@@ -1048,15 +1063,48 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
         </select>
         
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <label className="flex items-center gap-2"><input type="checkbox" checked={showFooter} onChange={e=>setShowFooter(e.target.checked)} /> Show bottom page counter</label>
-        
-      </div>
+      
 
-      <div>
-        <label className="block text-sm mb-1">Beer Cell Scale (default)</label>
-        <input type="range" min={0} max={100} value={localCellScale} onChange={e=>setLocalCellScale(Number(e.target.value))} className="w-60" />
-        <div className="text-xs opacity-70 mt-1">{localCellScale}% — controls image and typography scale.</div>
+      {/* Beer/Drinks controls */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
+          <div className="font-semibold mb-2">Beer Display</div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm mb-1">Beer Cell Scale (default)</label>
+              <input type="range" min={0} max={100} value={localCellScale} onChange={e=>setLocalCellScale(Number(e.target.value))} className="w-60" />
+              <div className="text-xs opacity-70 mt-1">{localCellScale}% — controls image and typography scale.</div>
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Beer Columns (default)</label>
+              <input type="number" min={1} max={6} value={localBeerColumns} onChange={e=>setLocalBeerColumns(Math.max(1, Math.min(6, Number(e.target.value)||1)))} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Beer Items per Column (local)</label>
+              <input type="number" min={1} max={50} value={Number.isFinite(localBeerItemsPerCol as any) ? localBeerItemsPerCol : 10} onChange={e=>{ const n=Math.max(1, Math.min(50, Number(e.target.value)||1)); setLocalBeerItemsPerCol(n); try{localStorage.setItem('beerItemsPerCol', String(n))}catch{} }} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+            </div>
+          </div>
+        </div>
+        <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
+          <div className="font-semibold mb-2">Drinks Display</div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm mb-1">Drinks Cell Scale (default)</label>
+              <input type="range" min={0} max={100} value={localDrinksCellScale} onChange={e=>setLocalDrinksCellScale(Number(e.target.value))} className="w-60" />
+              <div className="text-xs opacity-70 mt-1">{localDrinksCellScale}% — controls drinks typography scale.</div>
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Drinks Items per Column</label>
+              <input type="range" min={10} max={60} value={localDrinksItemsPerCol} onChange={e=>setLocalDrinksItemsPerCol(Math.max(10, Math.min(60, Number(e.target.value)||10)))} className="w-60" />
+              <div className="text-xs opacity-70 mt-1">{localDrinksItemsPerCol} items</div>
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Drinks indentation (% of cell)</label>
+              <input type="range" min={0} max={30} value={Number.isFinite(localDrinksIndentPct as any) ? localDrinksIndentPct : 10} onChange={e=>{ const n=Math.max(0, Math.min(30, Number(e.target.value)||0)); setDrinksIndent(n); try{ localStorage.setItem('drinksIndentPct', String(n)) } catch {} }} className="w-60" />
+              <div className="text-xs opacity-70 mt-1">{localDrinksIndentPct}%</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1156,21 +1204,20 @@ function StylePanel({ settings, onRefresh }: { settings: Settings|null; onRefres
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm mb-1">Column Gap</label>
-        <input type="range" min={0} max={80} value={localColumnGap} onChange={e=>setLocalColumnGap(Number(e.target.value))} className="w-60" />
-        <div className="text-xs opacity-70 mt-1">{localColumnGap}px — horizontal spacing between columns.</div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm mb-1">Beer Columns (default)</label>
-          <input type="number" min={1} max={6} value={localBeerColumns} onChange={e=>setLocalBeerColumns(Math.max(1, Math.min(6, Number(e.target.value)||1)))} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">Items per Page (default)</label>
-          <input type="number" min={1} max={500} value={localItemsPerPage} onChange={e=>setLocalItemsPerPage(Math.max(1, Math.min(500, Number(e.target.value)||1)))} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+      {/* Other controls */}
+      <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3 mt-4">
+        <div className="font-semibold mb-2">Other controls</div>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2"><input type="checkbox" checked={showFooter} onChange={e=>setShowFooter(e.target.checked)} /> Show bottom page counter</label>
+          <div>
+            <label className="block text-sm mb-1">Column Gap</label>
+            <input type="range" min={0} max={80} value={localColumnGap} onChange={e=>setLocalColumnGap(Number(e.target.value))} className="w-60" />
+            <div className="text-xs opacity-70 mt-1">{localColumnGap}px — horizontal spacing between columns.</div>
+          </div>
         </div>
       </div>
+
+      
       {/* Auto-save active; manual Save not required */}
     </div>
   )
@@ -1249,7 +1296,9 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
           {sizes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
+
       
+
       <div>
         <label className="block text-sm mb-1">Mode</label>
         <select value={modeSel} onChange={e=>{ const v = e.target.value as 'server'|'client'; setModeSel(v); onLocalModeChange(v) }} className="w-60 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
