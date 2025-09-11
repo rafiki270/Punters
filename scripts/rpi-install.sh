@@ -53,7 +53,7 @@ apt_install() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
   apt-get install -y \
-    git curl ca-certificates rsync x11-xserver-utils xdotool unclutter \
+    git curl ca-certificates rsync x11-xserver-utils xdotool unclutter vim \
     avahi-daemon \
     chromium-browser || true
   if ! command -v chromium-browser >/dev/null 2>&1; then
@@ -174,6 +174,15 @@ else
   echo "force-autologin script not found in repo; fetching from GitHub..."
   curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-force-autologin.sh" | \
     KIOSK_USER="$KIOSK_USER" KIOSK_PASSWORD="$KIOSK_PASSWORD" bash
+fi
+
+echo "\n== Setting boot splash (if image present) =="
+if [[ -x "$INSTALL_DIR/scripts/rpi-set-splash.sh" ]]; then
+  bash "$INSTALL_DIR/scripts/rpi-set-splash.sh" \
+    "$INSTALL_DIR/resources/info.png"
+else
+  curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-splash.sh" | \
+    bash -s -- "$INSTALL_DIR/resources/info.png"
 fi
 
 echo "\n== Enabling autostart service =="

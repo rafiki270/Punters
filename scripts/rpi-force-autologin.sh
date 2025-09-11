@@ -54,8 +54,7 @@ mkdir -p /etc/lightdm/lightdm.conf.d
   echo "autologin-user=${KIOSK_USER}"
   echo "autologin-user-timeout=0"
   if [[ -n "$SESSION" ]]; then echo "autologin-session=${SESSION}"; fi
-} >/etc/lightdm/lightdm.conf.d/12-punters-autologin.conf
+} >/etc/lightdm/lightdm.conf.d/99-punters-autologin.conf
 
 echo "[4/4] Done. Reboot to apply autologin changes."
 echo "You can reboot now with: sudo reboot"
-

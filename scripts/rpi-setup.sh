@@ -34,12 +34,12 @@ for g in "${groups[@]}"; do
   usermod -a -G "$g_trim" "$KIOSK_USER" || true
 done
 
-echo "[2/5] Updating apt and installing packages (git, Node.js 18, Chromium, VNC, utilities)"
+echo "[2/5] Updating apt and installing packages (git, Node.js 18, Chromium, VNC, utilities, vim)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 # Utilities and browser
 apt-get install -y \
-  git curl x11-xserver-utils xdotool unclutter \
+  git curl x11-xserver-utils xdotool unclutter vim \
   chromium-browser || true
 
 # On newer Raspberry Pi OS, package name may be 'chromium' (without -browser)
