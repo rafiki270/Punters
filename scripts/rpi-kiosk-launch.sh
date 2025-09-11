@@ -27,12 +27,20 @@ else
   exit 1
 fi
 
-# Ensure DISPLAY and unblank screen
+# Ensure DISPLAY and session env
 export DISPLAY=${DISPLAY:-:0}
 export XAUTHORITY=${XAUTHORITY:-/home/${SUDO_USER:-${USER}}/.Xauthority}
+if [[ -z "${XDG_RUNTIME_DIR:-}" && -n "${UID:-}" ]]; then
+  export XDG_RUNTIME_DIR="/run/user/${UID}"
+fi
 
 # If xset is available, disable power management/blanking
 if command -v xset >/dev/null 2>&1; then
+  # Wait briefly for X to be ready
+  for i in {1..60}; do
+    xset q >/dev/null 2>&1 && break || true
+    sleep 1
+  done
   xset s off || true
   xset -dpms || true
   xset s noblank || true
@@ -90,6 +98,8 @@ launch_browser() {
     --disable-infobars \
     --disable-session-crashed-bubble \
     --check-for-update-interval=31536000 \
+    --enable-features=UseOzonePlatform \
+    --ozone-platform=wayland \
     --overscroll-history-navigation=0 \
     "$url"
 }

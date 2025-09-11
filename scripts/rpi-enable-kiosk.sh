@@ -11,6 +11,7 @@ MODE=${1:-}
 CLIENT_URL=${2:-}
 INSTALL_DIR=${INSTALL_DIR:-/opt/punters}
 KIOSK_USER=${KIOSK_USER:-kiosk}
+KIOSK_UID=$(id -u "$KIOSK_USER" 2>/dev/null || echo 1000)
 CONFIG_FILE=/etc/default/punters-kiosk
 UNIT_FILE=/etc/systemd/system/punters-kiosk.service
 
@@ -55,7 +56,7 @@ echo "[3/4] Installing systemd service: ${UNIT_FILE}"
 cat >"$UNIT_FILE" <<'UNIT'
 [Unit]
 Description=Punters Kiosk (Chromium fullscreen + optional local server)
-After=network-online.target graphical.target
+After=systemd-user-sessions.service network-online.target graphical.target
 Wants=network-online.target
 
 [Service]
@@ -72,6 +73,7 @@ WorkingDirectory=${INSTALL_DIR:-/opt/punters}
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
+ExecStartPre=/usr/bin/bash -lc 'for i in {1..60}; do [ -S /tmp/.X11-unix/X0 ] && exit 0; sleep 1; done; exit 0'
 
 [Install]
 WantedBy=graphical.target
@@ -85,6 +87,11 @@ fi
 
 # Hardwire INSTALL_DIR into ExecStart for reliability
 sed -i "s#\${INSTALL_DIR:-/opt/punters}#${INSTALL_DIR}#g" "$UNIT_FILE"
+
+# Inject XDG_RUNTIME_DIR for the kiosk user (helps Wayland/Xwayland apps)
+if [[ -n "$KIOSK_UID" ]]; then
+  sed -i "/^Environment=CONFIG_FILE/a Environment=XDG_RUNTIME_DIR=/run/user/${KIOSK_UID}" "$UNIT_FILE"
+fi
 
 echo "[4/4] Enabling service and reloading daemon"
 systemctl daemon-reload

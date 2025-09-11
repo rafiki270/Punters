@@ -16,7 +16,17 @@ if id -u "$KIOSK_USER" >/dev/null 2>&1; then
 else
   adduser --disabled-password --gecos "" "$KIOSK_USER"
 fi
-usermod -a -G "$KIOSK_GROUPS" "$KIOSK_USER" || true
+
+# Ensure groups exist and add user to them
+IFS=',' read -r -a groups <<<"$KIOSK_GROUPS"
+for g in "${groups[@]}"; do
+  g_trim=$(echo "$g" | xargs)
+  [ -z "$g_trim" ] && continue
+  if ! getent group "$g_trim" >/dev/null 2>&1; then
+    groupadd "$g_trim" || true
+  fi
+  usermod -a -G "$g_trim" "$KIOSK_USER" || true
+done
 
 echo "[2/5] Updating apt and installing packages (git, Node.js 18, Chromium, VNC, utilities)"
 export DEBIAN_FRONTEND=noninteractive
