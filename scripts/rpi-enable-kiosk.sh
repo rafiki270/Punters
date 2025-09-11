@@ -44,6 +44,12 @@ else
   tar -C . -cf - --exclude .git . | tar -C "$INSTALL_DIR" -xf -
 fi
 chown -R "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR"
+# Normalize permissions and ensure scripts are executable
+find "$INSTALL_DIR" -type d -exec chmod 755 {} + 2>/dev/null || true
+find "$INSTALL_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
+if [[ -d "$INSTALL_DIR/scripts" ]]; then
+  chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
+fi
 
 echo "[2/4] Writing kiosk config: ${CONFIG_FILE}"
 cat >"$CONFIG_FILE" <<CFG

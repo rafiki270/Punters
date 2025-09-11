@@ -13,6 +13,7 @@ REPO_URL=${REPO_URL:-https://github.com/rafiki270/Punters.git}
 INSTALL_DIR=${INSTALL_DIR:-/opt/punters}
 DEFAULT_HOSTNAME=${DEFAULT_HOSTNAME:-punters}
 KIOSK_USER=${KIOSK_USER:-kiosk}
+KIOSK_PASSWORD=${KIOSK_PASSWORD-}
 
 echo "== Punters Raspberry Pi Installer =="
 echo "This will configure the Pi as a kiosk and autostart Chromium."
@@ -80,6 +81,11 @@ enable_remote_access() {
 setup_user_autologin() {
   if ! id -u "$KIOSK_USER" >/dev/null 2>&1; then
     adduser --disabled-password --gecos "" "$KIOSK_USER"
+    if [ -n "${KIOSK_PASSWORD}" ]; then
+      echo "${KIOSK_USER}:${KIOSK_PASSWORD}" | chpasswd || true
+    else
+      passwd -d "$KIOSK_USER" || true
+    fi
   fi
   # Ensure required groups exist and add user
   for g in autologin video audio input netdev tty render; do
@@ -87,16 +93,29 @@ setup_user_autologin() {
     usermod -a -G "$g" "$KIOSK_USER" || true
   done
 
-  if command -v raspi-config >/dev/null 2>&1; then
-    raspi-config nonint do_boot_behaviour B4 || true
+  # Ensure LightDM is present and enabled
+  apt-get install -y lightdm >/dev/null 2>&1 || true
+  systemctl enable lightdm || true
+  systemctl set-default graphical.target || true
+
+  # Determine desktop session for autologin
+  local SES=""
+  if [ -f /usr/share/wayland-sessions/wayfire.desktop ]; then
+    SES="wayfire"
+  elif [ -f /usr/share/xsessions/LXDE-pi.desktop ]; then
+    SES="LXDE-pi"
+  elif [ -f /usr/share/xsessions/LXDE.desktop ]; then
+    SES="LXDE"
   fi
+
+  # Configure autologin for kiosk user
   mkdir -p /etc/lightdm/lightdm.conf.d
-  cat >/etc/lightdm/lightdm.conf.d/12-punters-autologin.conf <<CONF
-[Seat:*]
-autologin-user=${KIOSK_USER}
-autologin-user-timeout=0
-user-session=lightdm-autologin
-CONF
+  {
+    echo "[Seat:*]"
+    echo "autologin-user=${KIOSK_USER}"
+    echo "autologin-user-timeout=0"
+    [ -n "$SES" ] && echo "autologin-session=${SES}"
+  } >/etc/lightdm/lightdm.conf.d/12-punters-autologin.conf
 }
 
 set_hostname() {
@@ -131,7 +150,9 @@ clone_repo() {
     sudo -u "$KIOSK_USER" git clone "$REPO_URL" "$INSTALL_DIR"
   fi
   chown -R "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR"
-  # Ensure scripts are executable
+  # Set safe permissions and ensure scripts are executable
+  find "$INSTALL_DIR" -type d -exec chmod 755 {} + 2>/dev/null || true
+  find "$INSTALL_DIR" -type f -exec chmod 644 {} + 2>/dev/null || true
   if [[ -d "$INSTALL_DIR/scripts" ]]; then
     chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
   fi

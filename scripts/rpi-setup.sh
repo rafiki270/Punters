@@ -8,6 +8,7 @@ if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
 fi
 
 KIOSK_USER=${KIOSK_USER:-kiosk}
+KIOSK_PASSWORD=${KIOSK_PASSWORD-}
 KIOSK_GROUPS=${KIOSK_GROUPS:-"autologin,video,audio,input,netdev,tty,render"}
 
 echo "[1/5] Creating kiosk user: ${KIOSK_USER}"
@@ -15,6 +16,11 @@ if id -u "$KIOSK_USER" >/dev/null 2>&1; then
   echo "User $KIOSK_USER already exists."
 else
   adduser --disabled-password --gecos "" "$KIOSK_USER"
+  if [ -n "${KIOSK_PASSWORD}" ]; then
+    echo "${KIOSK_USER}:${KIOSK_PASSWORD}" | chpasswd || true
+  else
+    passwd -d "$KIOSK_USER" || true
+  fi
 fi
 
 # Ensure groups exist and add user to them
@@ -62,19 +68,29 @@ else
 fi
 
 echo "[4/5] Configuring desktop autologin for user ${KIOSK_USER}"
-# Try raspi-config for Desktop Autologin; fallback to LightDM config
-if command -v raspi-config >/dev/null 2>&1; then
-  # B4 is Desktop Autologin on many releases; ignore failure and fallback
-  raspi-config nonint do_boot_behaviour B4 || true
+# Ensure LightDM is present and enabled
+apt-get install -y lightdm >/dev/null 2>&1 || true
+systemctl enable lightdm || true
+systemctl set-default graphical.target || true
+
+# Determine desktop session for autologin
+SES=""
+if [ -f /usr/share/wayland-sessions/wayfire.desktop ]; then
+  SES="wayfire"
+elif [ -f /usr/share/xsessions/LXDE-pi.desktop ]; then
+  SES="LXDE-pi"
+elif [ -f /usr/share/xsessions/LXDE.desktop ]; then
+  SES="LXDE"
 fi
 
+# Configure autologin for kiosk user
 mkdir -p /etc/lightdm/lightdm.conf.d
-cat >/etc/lightdm/lightdm.conf.d/12-punters-autologin.conf <<CONF
-[Seat:*]
-autologin-user=${KIOSK_USER}
-autologin-user-timeout=0
-user-session=lightdm-autologin
-CONF
+{
+  echo "[Seat:*]"
+  echo "autologin-user=${KIOSK_USER}"
+  echo "autologin-user-timeout=0"
+  [ -n "$SES" ] && echo "autologin-session=${SES}"
+} >/etc/lightdm/lightdm.conf.d/12-punters-autologin.conf
 
 echo "[5/5] Preparing /opt/punters and permissions"
 mkdir -p /opt/punters
