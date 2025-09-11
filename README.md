@@ -135,13 +135,19 @@ Factory reset
 - Docker: `docker compose up --build` publishes port 3000; connect to `http://<your-ip>:3000/`.
 - Security: When exposing beyond a trusted LAN, enable the admin password (`POST /api/auth/set-password`) so admin routes are protected.
 
-## Raspberry Pi Setup (preview)
-- Install Node.js 20+ (ARM build) and Git.
-- Enable kiosk mode (Chromium) to auto-launch the display URL in full-screen.
-- Run the server as a `systemd` service and configure auto-restart.
-- Use local hostname `http://punters.local` (mDNS) for clients on the LAN.
-
-Full, step-by-step instructions will be documented during implementation.
+## Raspberry Pi
+- One-line interactive install (choose Server or Client):
+  - `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/scripts/rpi-install.sh)"`
+- Server mode:
+  - Runs the app locally, binds to port 80, and autostarts Chromium fullscreen to `http://localhost` at boot.
+  - Prompts for a hostname (defaults to `punters`) and enables mDNS, so you can reach it via `http://<hostname>.local`.
+- Client mode:
+  - Prompts for the server URL (e.g., `http://punters.local`) and autostarts Chromium fullscreen to that URL at boot.
+- URLs after install:
+  - Server mode: `http://<hostname>.local/` (defaults to `http://punters.local/`), API health at `http://<hostname>.local/api/health`.
+  - Client mode: Chromium opens to the URL you provide during install.
+- Update on Pi:
+  - From `/opt/punters`: `make update` (adds migrations and rebuilds). Use `RESTART=1` to restart the kiosk service after building: `RESTART=1 make update`.
 
 ## Contributing
 - Open issues or proposals based on REQUIREMENTS.md.

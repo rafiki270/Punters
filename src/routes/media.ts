@@ -16,7 +16,7 @@ export async function registerMediaRoutes(app: FastifyInstance) {
         OR: [
           { tags: null },
           { tags: '' },
-          { tags: { notIn: ['style:logo', 'style:background'] } },
+          { tags: { notIn: ['style:logo', 'style:background', 'drink:logo'] } },
         ]
       },
       orderBy: [
@@ -88,10 +88,11 @@ export async function registerMediaRoutes(app: FastifyInstance) {
 
   app.delete('/api/assets/:id', { preHandler: requireAdmin }, async (req, reply) => {
     const id = Number((req.params as any).id)
-    // Prevent deleting assets that are in use as beer badges
-    const inUse = await prisma.beer.count({ where: { badgeAssetId: id } })
-    if (inUse > 0) {
-      return reply.code(400).send({ error: 'Asset is used by a beer badge and cannot be deleted from Media.' })
+    // Prevent deleting assets that are in use as beer badges or drink logos
+    const beerUse = await prisma.beer.count({ where: { badgeAssetId: id } })
+    const drinkUse = await prisma.drink.count({ where: { logoAssetId: id } }).catch(()=>0)
+    if ((beerUse > 0) || (drinkUse > 0)) {
+      return reply.code(400).send({ error: 'Asset is in use and cannot be deleted from Media.' })
     }
     await prisma.asset.delete({ where: { id } }).catch(() => {})
     emitChange('media')

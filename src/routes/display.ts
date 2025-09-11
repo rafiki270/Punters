@@ -12,7 +12,7 @@ export async function registerDisplayRoutes(app: FastifyInstance) {
         OR: [
           { tags: null },
           { tags: '' },
-          { tags: { notIn: ['style:logo', 'style:background'] } },
+          { tags: { notIn: ['style:logo', 'style:background', 'drink:logo'] } },
         ]
       },
       orderBy: { createdAt: 'desc' }

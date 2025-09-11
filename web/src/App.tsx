@@ -701,21 +701,44 @@ function Display() {
                     ) : (
                       <div key={`itm-${ci}-${idx}`} className="mb-3 border-b border-neutral-800/40 pb-1">
                         <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0" style={{ paddingLeft: `${localDrinksIndentPct}%` }}>
-                            <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (localDrinksCellScale/50))) }}>{e.drink.name}</div>
-                            {(() => {
-                              const d = e.drink
-                              const parts: string[] = []
-                              if (d.producer) parts.push(String(d.producer))
-                              if (d.style) parts.push(String(d.style))
-                              if (d.origin) parts.push(String(d.origin))
-                              if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
-                              return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
-                            })()}
-                            {e.drink.description ? (
-                              <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{e.drink.description}</div>
-                            ) : null}
-                          </div>
+                          {e.drink.logoAssetId ? (
+                            <div className="flex items-stretch gap-0 flex-1 min-w-0">
+                              <div className="shrink-0 self-stretch" style={{ width: `${localDrinksIndentPct}%` }}>
+                                <img src={`${contentBase}/api/assets/${e.drink.logoAssetId}/content`} alt={e.drink.name} className="h-full w-full object-contain" />
+                              </div>
+                              <div className="min-w-0 pl-[18px]">
+                                <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (localDrinksCellScale/50))) }}>{e.drink.name}</div>
+                                {(() => {
+                                  const d = e.drink
+                                  const parts: string[] = []
+                                  if (d.producer) parts.push(String(d.producer))
+                                  if (d.style) parts.push(String(d.style))
+                                  if (d.origin) parts.push(String(d.origin))
+                                  if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
+                                  return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
+                                })()}
+                                {e.drink.description ? (
+                                  <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{e.drink.description}</div>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="min-w-0 flex-1" style={{ paddingLeft: `calc(${localDrinksIndentPct}% + 18px)` }}>
+                              <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (localDrinksCellScale/50))) }}>{e.drink.name}</div>
+                              {(() => {
+                                const d = e.drink
+                                const parts: string[] = []
+                                if (d.producer) parts.push(String(d.producer))
+                                if (d.style) parts.push(String(d.style))
+                                if (d.origin) parts.push(String(d.origin))
+                                if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
+                                return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
+                              })()}
+                              {e.drink.description ? (
+                                <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{e.drink.description}</div>
+                              ) : null}
+                            </div>
+                          )}
                           <div className="text-right whitespace-nowrap">
                             {Array.isArray(e.drink.prices) && e.drink.prices
                               .filter((p:any)=> (p.amountMinor||0)>0 && sizeMap.get(p.serveSizeId)?.forDrinks !== false)
@@ -1627,17 +1650,20 @@ function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void
 
 // Other Drinks Admin Panel
 type DrinkCategory = { id: number; name: string; displayOrder: number; active: boolean }
-type Drink = { id: number; name: string; categoryId: number; producer?: string|null; style?: string|null; abv?: number|null; origin?: string|null; description?: string|null; active: boolean; displayOrder: number; prices?: Price[] }
+type Drink = { id: number; name: string; categoryId: number; producer?: string|null; style?: string|null; abv?: number|null; origin?: string|null; description?: string|null; active: boolean; displayOrder: number; prices?: Price[]; logoAssetId?: number|null }
 
 function DrinksPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void }) {
   const [categories, setCategories] = useState<DrinkCategory[]>([])
   const [drinks, setDrinks] = useState<Drink[]>([])
   const [catFilter, setCatFilter] = useState<number|''>('')
-  const [form, setForm] = useState<{ id?: number|null; name: string; categoryName: string; producer?: string; style?: string; abv?: number; origin?: string; description?: string; active?: boolean; prices: Record<number, number> }>({ name:'', categoryName:'', producer:'', style:'', abv: undefined, origin:'', description:'', active:true, prices:{} })
+  const [form, setForm] = useState<{ id?: number|null; name: string; categoryName: string; producer?: string; style?: string; abv?: number; origin?: string; description?: string; active?: boolean; prices: Record<number, number>; logoAssetId?: number|null }>({ name:'', categoryName:'', producer:'', style:'', abv: undefined, origin:'', description:'', active:true, prices:{}, logoAssetId: null })
   const [editingId, setEditingId] = useState<number|null>(null)
   const [newCat, setNewCat] = useState('')
   const [editCatId, setEditCatId] = useState<number|null>(null)
   const [editCatName, setEditCatName] = useState<string>('')
+  const [logoFile, setLogoFile] = useState<File|null>(null)
+  const [logoPreviewId, setLogoPreviewId] = useState<number|null>(null)
+  const [removeLogo, setRemoveLogo] = useState<boolean>(false)
 
   const load = async () => {
     const [cats, list] = await Promise.all([
@@ -1652,24 +1678,36 @@ function DrinksPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => voi
 
   const submit = async () => {
     if (!form.name.trim() || !form.categoryName.trim()) { alert('Enter name and category'); return }
+    let uploadedLogoId: number | undefined
+    if (logoFile) {
+      const fd = new FormData(); fd.append('file', logoFile); fd.append('tag','drink:logo')
+      const up = await fetch('/api/upload', { method:'POST', body: fd })
+      if (up.ok) { const a = await up.json(); uploadedLogoId = a.id }
+    }
     if (editingId==null) {
-      const res = await fetch('/api/drinks', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: form.name, categoryName: form.categoryName, producer: form.producer || undefined, style: form.style || undefined, abv: form.abv, origin: form.origin || undefined, description: form.description || undefined, active: form.active !== false }) })
+      const body: any = { name: form.name, categoryName: form.categoryName, producer: form.producer || undefined, style: form.style || undefined, abv: form.abv, origin: form.origin || undefined, description: form.description || undefined, active: form.active !== false }
+      if (typeof uploadedLogoId === 'number') body.logoAssetId = uploadedLogoId
+      const res = await fetch('/api/drinks', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
       if (!res.ok) { alert('Failed to create drink'); return }
       const d = await res.json(); if (!d?.id) return
       const prices = Object.entries(form.prices).map(([sid, amt]) => ({ serveSizeId:Number(sid), amountMinor: Math.round(Number(amt)*100), currency:'GBP' }))
       if (prices.length) await fetch(`/api/drinks/${d.id}/prices`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prices }) })
     } else {
-      await fetch(`/api/drinks/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: form.name, categoryName: form.categoryName, producer: form.producer || undefined, style: form.style || undefined, abv: form.abv, origin: form.origin || undefined, description: form.description || undefined, active: form.active !== false }) })
+      const body: any = { name: form.name, categoryName: form.categoryName, producer: form.producer || undefined, style: form.style || undefined, abv: form.abv, origin: form.origin || undefined, description: form.description || undefined, active: form.active !== false }
+      if (typeof uploadedLogoId === 'number') body.logoAssetId = uploadedLogoId
+      else if (removeLogo) body.logoAssetId = null
+      await fetch(`/api/drinks/${editingId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
       const prices = Object.entries(form.prices).map(([sid, amt]) => ({ serveSizeId:Number(sid), amountMinor: Math.round(Number(amt)*100), currency:'GBP' }))
       if (prices.length) await fetch(`/api/drinks/${editingId}/prices`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prices }) })
     }
     setEditingId(null)
-    setForm({ name:'', categoryName:'', producer:'', style:'', abv: undefined, origin:'', description:'', active:true, prices:{} })
+    setForm({ name:'', categoryName:'', producer:'', style:'', abv: undefined, origin:'', description:'', active:true, prices:{}, logoAssetId: null })
+    setLogoFile(null); setLogoPreviewId(null); setRemoveLogo(false)
     await load(); await onRefresh()
   }
   const archive = async (id:number) => { await fetch(`/api/drinks/${id}`, { method:'DELETE' }); await load(); await onRefresh() }
-  const openEdit = async (id:number) => { const d=await fetch(`/api/drinks/${id}`).then(r=>r.json()); setEditingId(id); setForm({ name:d.name, categoryName: (categories.find(c=>c.id===d.categoryId)?.name || ''), producer:d.producer||'', style:d.style||'', abv:d.abv||undefined, origin:d.origin||'', description:d.description||'', active:d.active!==false, prices:Object.fromEntries((d.prices||[]).map((p:any)=>[p.serveSizeId,(p.amountMinor||0)/100])) }) }
-  const cancel = () => { setEditingId(null); setForm({ name:'', categoryName:'', producer:'', style:'', abv: undefined, origin:'', description:'', active:true, prices:{} }) }
+  const openEdit = async (id:number) => { const d=await fetch(`/api/drinks/${id}`).then(r=>r.json()); setEditingId(id); setForm({ name:d.name, categoryName: (categories.find(c=>c.id===d.categoryId)?.name || ''), producer:d.producer||'', style:d.style||'', abv:d.abv||undefined, origin:d.origin||'', description:d.description||'', active:d.active!==false, prices:Object.fromEntries((d.prices||[]).map((p:any)=>[p.serveSizeId,(p.amountMinor||0)/100])), logoAssetId: d.logoAssetId ?? null }); setLogoPreviewId(d.logoAssetId ?? null); setLogoFile(null); setRemoveLogo(false) }
+  const cancel = () => { setEditingId(null); setForm({ name:'', categoryName:'', producer:'', style:'', abv: undefined, origin:'', description:'', active:true, prices:{}, logoAssetId: null }); setLogoFile(null); setLogoPreviewId(null); setRemoveLogo(false) }
 
   const filtered = drinks.filter(d => !catFilter || d.categoryId === catFilter)
   const selectedCat = useMemo(() => (typeof catFilter === 'number' ? categories.find(c=>c.id===catFilter) || null : null), [categories, catFilter])
@@ -1841,6 +1879,18 @@ function DrinksPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => voi
             <input placeholder="Origin (optional)" value={form.origin||''} onChange={e=>setForm({...form, origin:e.target.value})} className="px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
           </div>
           <textarea placeholder="Description (optional)" value={form.description||''} onChange={e=>setForm({...form, description:e.target.value})} className="w-full px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+          <div className="border rounded p-2 border-neutral-300 dark:border-neutral-800">
+            <div className="flex items-center justify-between mb-1">
+              <div className="font-semibold">Logo Image {editingId==null?'(optional)':'(replace optional)'}</div>
+              {editingId!=null && logoPreviewId!=null && !removeLogo && (
+                <div className="flex items-center gap-2">
+                  <img src={`/api/assets/${logoPreviewId}/content`} alt="logo" className="h-8 w-8 object-contain border border-neutral-300 dark:border-neutral-700" />
+                  <button type="button" onClick={()=>{ setRemoveLogo(true); setLogoPreviewId(null); setLogoFile(null) }} className="text-xs px-2 py-0.5 rounded bg-neutral-200 text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Remove</button>
+                </div>
+              )}
+            </div>
+            <input type="file" accept="image/jpeg,image/png" onChange={e=>{ setLogoFile(e.target.files?.[0] ?? null); setRemoveLogo(false); (e.target as HTMLInputElement).value='' }} className="block w-full text-sm text-neutral-900 dark:text-neutral-100 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-neutral-700 dark:hover:file:bg-neutral-600" />
+          </div>
           <div className="font-semibold mb-1">Prices</div>
           <div className="grid grid-cols-2 gap-2">
             {sizes

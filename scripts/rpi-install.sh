@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# Interactive Raspberry Pi installer for Punters.
+# Intended usage:
+#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/scripts/rpi-install.sh)"
+set -euo pipefail
+
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  echo "This installer must run as root. Re-run with sudo." >&2
+  exit 1
+fi
+
+REPO_URL=${REPO_URL:-https://github.com/rafiki270/Punters.git}
+INSTALL_DIR=${INSTALL_DIR:-/opt/punters}
+DEFAULT_HOSTNAME=${DEFAULT_HOSTNAME:-punters}
+KIOSK_USER=${KIOSK_USER:-kiosk}
+
+echo "== Punters Raspberry Pi Installer =="
+echo "This will configure the Pi as a kiosk and autostart Chromium."
+echo
+
+read_mode() {
+  local choice
+  while true; do
+    echo "Select mode:"
+    echo "  1) Server (host app on this Pi)"
+    echo "  2) Client (open a remote server URL)"
+    read -rp "Enter 1 or 2: " choice || true
+    case "$choice" in
+      1|server|Server) MODE=server; break;;
+      2|client|Client) MODE=client; break;;
+      *) echo "Invalid selection.";;
+    esac
+  done
+}
+
+read_server_inputs() {
+  read -rp "Hostname for this Pi [${DEFAULT_HOSTNAME}]: " HOSTNAME_NEW || true
+  HOSTNAME_NEW=${HOSTNAME_NEW:-$DEFAULT_HOSTNAME}
+}
+
+read_client_inputs() {
+  while true; do
+    read -rp "Remote server URL (e.g., http://servername.local:3000): " CLIENT_URL || true
+    if [[ -n "${CLIENT_URL}" ]]; then
+      break
+    fi
+    echo "URL cannot be empty."
+  done
+}
+
+apt_install() {
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  apt-get install -y \
+    git curl ca-certificates rsync x11-xserver-utils xdotool unclutter \
+    avahi-daemon \
+    chromium-browser || true
+  if ! command -v chromium-browser >/dev/null 2>&1; then
+    apt-get install -y chromium || true
+  fi
+  # Install Node.js 18 from NodeSource if needed
+  if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(18|20)\.'; then
+    echo "Installing Node.js 18 (NodeSource)"
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    apt-get install -y nodejs
+  fi
+}
+
+enable_remote_access() {
+  if command -v raspi-config >/dev/null 2>&1; then
+    raspi-config nonint do_ssh 0 || true
+    raspi-config nonint do_vnc 0 || true
+  else
+    systemctl enable --now ssh || true
+    apt-get install -y realvnc-vnc-server || true
+    systemctl enable --now vncserver-x11-serviced || true
+  fi
+}
+
+setup_user_autologin() {
+  if ! id -u "$KIOSK_USER" >/dev/null 2>&1; then
+    adduser --disabled-password --gecos "" "$KIOSK_USER"
+  fi
+  usermod -a -G autologin,video,audio,input,netdev,tty,render "$KIOSK_USER" || true
+
+  if command -v raspi-config >/dev/null 2>&1; then
+    raspi-config nonint do_boot_behaviour B4 || true
+  fi
+  mkdir -p /etc/lightdm/lightdm.conf.d
+  cat >/etc/lightdm/lightdm.conf.d/12-punters-autologin.conf <<CONF
+[Seat:*]
+autologin-user=${KIOSK_USER}
+autologin-user-timeout=0
+user-session=lightdm-autologin
+CONF
+}
+
+set_hostname() {
+  local new="$1"
+  if [[ -n "$new" ]]; then
+    echo "Setting hostname to '$new'"
+    hostnamectl set-hostname "$new" || true
+    # Ensure /etc/hosts has 127.0.1.1
+    if grep -q "^127.0.1.1" /etc/hosts; then
+      sed -i "s/^127.0.1.1.*/127.0.1.1\t${new}/" /etc/hosts
+    else
+      echo -e "127.0.1.1\t${new}" >> /etc/hosts
+    fi
+    systemctl enable --now avahi-daemon || true
+  fi
+}
+
+clone_repo() {
+  if [[ -d "$INSTALL_DIR/.git" ]]; then
+    echo "Repo exists in $INSTALL_DIR. Pulling latest..."
+    git -C "$INSTALL_DIR" pull --ff-only || true
+  else
+    echo "Cloning repo into $INSTALL_DIR ..."
+    mkdir -p "$INSTALL_DIR"
+    git clone "$REPO_URL" "$INSTALL_DIR"
+  fi
+  chown -R "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR"
+}
+
+enable_kiosk_service() {
+  if [[ "$MODE" == "server" ]]; then
+    bash "$INSTALL_DIR/scripts/rpi-enable-kiosk.sh" server
+  else
+    bash "$INSTALL_DIR/scripts/rpi-enable-kiosk.sh" client "$CLIENT_URL"
+  fi
+}
+
+# --- Interactive flow ---
+read_mode
+if [[ "$MODE" == "server" ]]; then
+  read_server_inputs
+else
+  read_client_inputs
+fi
+
+echo "\n== Installing packages =="
+apt_install
+
+echo "\n== Enabling SSH and VNC =="
+enable_remote_access
+
+echo "\n== Creating kiosk user and configuring autologin =="
+setup_user_autologin
+
+if [[ "$MODE" == "server" ]]; then
+  echo "\n== Setting hostname =="
+  set_hostname "$HOSTNAME_NEW"
+fi
+
+echo "\n== Fetching application =="
+clone_repo
+
+echo "\n== Enabling autostart service =="
+enable_kiosk_service
+
+echo "\nSetup complete. The kiosk will start after reboot."
+read -rp "Reboot now? [y/N]: " answer || true
+case "${answer:-}" in
+  y|Y) systemctl reboot;;
+  *) echo "You can reboot later with: sudo reboot";;
+esac

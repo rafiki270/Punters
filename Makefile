@@ -1,7 +1,12 @@
 SHELL := /bin/bash
 HOST_PORT ?= 80
 
-.PHONY: help install dev dev-web build start kioskpi prisma-generate prisma-migrate db-seed docker-build docker-up docker-down docker-logs launch launch80 check-api docker-toggle docker-publish-latest docker-release
+.PHONY: help install dev dev-web build start \
+  kioskpi prisma-generate prisma-migrate db-seed \
+  docker-build docker-up docker-down docker-logs \
+  launch launch80 launch-client update \
+  pi-setup pi-launch pi-launch-client \
+  check-api docker-toggle docker-publish-latest docker-release
 
 .DEFAULT_GOAL := help
 
@@ -36,6 +41,23 @@ start: ## Start built server (serves built web)
 
 kioskpi: ## Run server and Chromium in kiosk mode on Raspberry Pi
 	./scripts/pi-kiosk.sh
+
+# Raspberry Pi: setup and autostart kiosk (server/client)
+pi-setup: ## Raspberry Pi: create kiosk user, install deps, enable SSH/VNC, autologin
+	@echo "Running Raspberry Pi setup (requires sudo)..." && \
+	sudo bash scripts/rpi-setup.sh
+
+pi-launch: ## Raspberry Pi: install to /opt and autostart server + fullscreen browser at boot
+	@echo "Enabling kiosk autostart (server mode) ..." && \
+	sudo bash scripts/rpi-enable-kiosk.sh server
+
+pi-launch-client: ## Raspberry Pi: autostart fullscreen browser to URL at boot (no local server); pass URL=...
+	@if [ -z "$(URL)" ]; then echo "Set URL, e.g. make pi-launch-client URL=http://server:3000"; exit 1; fi
+	@echo "Enabling kiosk autostart (client mode) -> $(URL) ..." && \
+	sudo bash scripts/rpi-enable-kiosk.sh client "$(URL)"
+
+# Convenience alias matching requested wording
+launch-client: pi-launch-client ## Alias: make launch-client URL=...
 
 docker-build: ## Build Docker images (Compose, bridged profile)
 	docker compose --profile bridged build
@@ -114,6 +136,26 @@ launch80: ## One-shot dev on web port 80: installs deps (unless SKIP_INSTALL=1),
 	npm run -s dev; \
 	kill $$server_pid 2>/dev/null || true; \
 	wait $$server_pid 2>/dev/null || true
+
+update: ## Pull latest code, install deps, run Prisma generate+migrate, and build (optional RESTART=1 to restart systemd kiosk)
+	@echo "Pulling latest from git..." && git pull --ff-only || true
+	@if [ -z "$$SKIP_INSTALL" ]; then \
+	  echo "Installing root dependencies..."; npm install; \
+	  echo "Installing web dependencies..."; npm --prefix web install; \
+	else \
+	  echo "Skipping dependency install (SKIP_INSTALL=1)"; \
+	fi
+	@echo "Generating Prisma client..." && npm run -s prisma:generate
+	@echo "Applying Prisma migrations..." && npm run -s prisma:migrate
+	@echo "Building project..." && npm run -s build
+	@if [ -n "$$RESTART" ]; then \
+	  if command -v systemctl >/dev/null 2>&1; then \
+	    echo "Restarting punters-kiosk.service..."; \
+	    sudo systemctl restart punters-kiosk.service || true; \
+	  fi; \
+	else \
+	  echo "If running on Raspberry Pi kiosk, set RESTART=1 to restart the service."; \
+	fi
 
 check-api: ## Quick API checks on 3000 and 5173 (proxy)
 	@echo "Checking API on :3000 (direct)" && \

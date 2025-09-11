@@ -161,6 +161,7 @@ model Asset {
   beersWithBadge Beer[] @relation("BadgeAsset")
   globalLogo GlobalSettings[] @relation("LogoAsset")
   globalBackground GlobalSettings[] @relation("BackgroundAsset")
+  drinksWithLogo Drink[] @relation("DrinkLogoAsset")
 }
 
 model DefaultPrice {
@@ -195,6 +196,8 @@ model Drink {
   active       Boolean        @default(true)
   displayOrder Int            @default(0)
   prices       DrinkPrice[]
+  logoAssetId  Int?
+  logoAsset    Asset?         @relation("DrinkLogoAsset", fields: [logoAssetId], references: [id])
 
   @@unique([categoryId, name])
 }

@@ -16,7 +16,8 @@ const DrinkCreate = z.object({
   abv: z.number().optional(),
   origin: z.string().optional(),
   description: z.string().optional(),
-  active: z.boolean().optional()
+  active: z.boolean().optional(),
+  logoAssetId: z.number().int().nullable().optional(),
 })
 
 const DrinkUpdate = DrinkCreate.partial()
@@ -115,7 +116,7 @@ export async function registerDrinkRoutes(app: FastifyInstance) {
         categoryId = created.id
       }
     }
-    const created = await prisma.drink.create({ data: { name: data.name, categoryId: categoryId as number, producer: data.producer, style: data.style, abv: data.abv, origin: data.origin, description: data.description, active: data.active ?? true } })
+    const created = await prisma.drink.create({ data: { name: data.name, categoryId: categoryId as number, producer: data.producer, style: data.style, abv: data.abv, origin: data.origin, description: data.description, active: data.active ?? true, logoAssetId: (data as any).logoAssetId ?? null } })
     emitChange('drinks')
     return created
   })
