@@ -14,6 +14,7 @@ INSTALL_DIR=${INSTALL_DIR:-/opt/punters}
 DEFAULT_HOSTNAME=${DEFAULT_HOSTNAME:-punters}
 KIOSK_USER=${KIOSK_USER:-kiosk}
 KIOSK_PASSWORD=${KIOSK_PASSWORD-}
+PIXEL_DOUBLE=${PIXEL_DOUBLE:-}
 
 echo "== Punters Raspberry Pi Installer =="
 echo "This will configure the Pi as a kiosk and autostart Chromium."
@@ -49,11 +50,25 @@ read_client_inputs() {
   done
 }
 
+read_display_prefs() {
+  local ans
+  echo
+  echo "Display setup:"
+  while true; do
+    read -rp "Is your TV/monitor 4K (UHD)? Enable pixel doubling for crisp 1080p? [y/N]: " ans || true
+    case "${ans:-}" in
+      y|Y) PIXEL_DOUBLE=1; break;;
+      n|N|"") PIXEL_DOUBLE=0; break;;
+      *) echo "Please answer y or n.";;
+    esac
+  done
+}
+
 apt_install() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
   apt-get install -y \
-    git curl ca-certificates rsync x11-xserver-utils xdotool unclutter vim \
+    git curl ca-certificates rsync x11-xserver-utils xdotool unclutter vim feh pcmanfm \
     avahi-daemon \
     chromium-browser || true
   if ! command -v chromium-browser >/dev/null 2>&1; then
@@ -150,6 +165,9 @@ else
   read_client_inputs
 fi
 
+# Ask about display pixel doubling (helps 1080p on 4K panels)
+read_display_prefs
+
 echo "\n== Installing packages =="
 apt_install
 
@@ -183,6 +201,28 @@ if [[ -x "$INSTALL_DIR/scripts/rpi-set-splash.sh" ]]; then
 else
   curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-splash.sh" | \
     bash -s -- "$INSTALL_DIR/resources/info.png"
+fi
+
+echo "\n== Forcing 1080p resolution (best-effort) =="
+if [[ -x "$INSTALL_DIR/scripts/rpi-set-resolution.sh" ]]; then
+  PIXEL_DOUBLE="$PIXEL_DOUBLE" bash "$INSTALL_DIR/scripts/rpi-set-resolution.sh" 1920 1080
+else
+  curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-resolution.sh" | PIXEL_DOUBLE="$PIXEL_DOUBLE" bash -s -- 1920 1080
+fi
+
+echo "\n== Disabling sleep/screensaver =="
+if [[ -x "$INSTALL_DIR/scripts/rpi-disable-sleep.sh" ]]; then
+  bash "$INSTALL_DIR/scripts/rpi-disable-sleep.sh"
+else
+  curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-disable-sleep.sh" | bash -s --
+fi
+
+echo "\n== Setting desktop wallpaper for autologin user =="
+if [[ -x "$INSTALL_DIR/scripts/rpi-set-wallpaper.sh" ]]; then
+  bash "$INSTALL_DIR/scripts/rpi-set-wallpaper.sh" "$INSTALL_DIR/web/public/bcg/weathered wood.jpg"
+else
+  curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-wallpaper.sh" | \
+    bash -s -- "$INSTALL_DIR/web/public/bcg/weathered wood.jpg"
 fi
 
 echo "\n== Enabling autostart service =="

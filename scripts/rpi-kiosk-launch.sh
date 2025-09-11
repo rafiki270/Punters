@@ -46,6 +46,14 @@ if command -v xset >/dev/null 2>&1; then
   xset s noblank || true
 fi
 
+# Try to set display resolution to 1920x1080 on the primary output (best-effort)
+if command -v xrandr >/dev/null 2>&1; then
+  primary_output=$(xrandr --query 2>/dev/null | awk '/ connected primary/{print $1; exit} / connected/{print $1; exit}')
+  if [[ -n "${primary_output:-}" ]]; then
+    xrandr --output "$primary_output" --mode 1920x1080 --rate 60 >/dev/null 2>&1 || true
+  fi
+fi
+
 # Hide mouse cursor after idle
 if command -v unclutter >/dev/null 2>&1; then
   unclutter -idle 0.5 -root &
