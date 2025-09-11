@@ -56,5 +56,16 @@ mkdir -p /etc/lightdm/lightdm.conf.d
   if [[ -n "$SESSION" ]]; then echo "autologin-session=${SESSION}"; fi
 } >/etc/lightdm/lightdm.conf.d/99-punters-autologin.conf
 
+# Also force in main config to override any defaults
+if [[ -f /etc/lightdm/lightdm.conf ]]; then
+  if grep -q '^\s*autologin-user\s*=' /etc/lightdm/lightdm.conf; then
+    sed -i -E 's/^(\s*autologin-user\s*=).*/\1'"${KIOSK_USER}"'/' /etc/lightdm/lightdm.conf || true
+  else
+    printf "\n[Seat:*]\nautologin-user=%s\n" "$KIOSK_USER" >> /etc/lightdm/lightdm.conf
+  fi
+else
+  printf "[Seat:*]\nautologin-user=%s\n" "$KIOSK_USER" > /etc/lightdm/lightdm.conf
+fi
+
 echo "[4/4] Done. Reboot to apply autologin changes."
 echo "You can reboot now with: sudo reboot"
