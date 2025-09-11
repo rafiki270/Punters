@@ -93,6 +93,7 @@ Factory reset
 - `make launch` — one-shot dev: installs dependencies (unless `SKIP_INSTALL=1`), prepares DB (generate/migrate/seed), then starts web (5173) + server (3000).
   - Prints detected LAN IPs so you can open `http://<ip>:5173/` from other devices.
 - `make launch80` — same as `launch` but serves the web app on port 80 instead of 5173.
+  - On macOS/Linux/Windows, port 80 is privileged; run with sudo/Administrator: `sudo make launch80`.
 - `make install` — install dependencies
 - `make prisma-generate` — generate Prisma client
 - `make prisma-migrate` — run migrations (dev)
@@ -137,7 +138,7 @@ Factory reset
 
 ## Raspberry Pi
 - One-line interactive install (choose Server or Client):
-  - `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/scripts/rpi-install.sh)"`
+  - `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-install.sh)"`
 - Server mode:
   - Runs the app locally, binds to port 80, and autostarts Chromium fullscreen to `http://localhost` at boot.
   - Prompts for a hostname (defaults to `punters`) and enables mDNS, so you can reach it via `http://<hostname>.local`.

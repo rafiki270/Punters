@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Interactive Raspberry Pi installer for Punters.
 # Intended usage:
-#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/scripts/rpi-install.sh)"
+#   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-install.sh)"
 set -euo pipefail
 
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then

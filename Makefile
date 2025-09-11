@@ -130,8 +130,8 @@ launch80: ## One-shot dev on web port 80: installs deps (unless SKIP_INSTALL=1),
 	else \
 	  echo "No non-loopback IPv4 detected. You can still use http://localhost and http://localhost:3000"; \
 	fi
-	@echo "Starting web dev server (80) and API (3000)..."
-	@npm run -s dev:web -- --port 80 & \
+	@echo "Starting web dev server (80, host=0.0.0.0) and API (3000)..."
+	@(cd web && npx vite --host --port 80) & \
 	server_pid=$$!; \
 	npm run -s dev; \
 	kill $$server_pid 2>/dev/null || true; \
