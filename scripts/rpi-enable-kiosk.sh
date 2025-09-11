@@ -11,7 +11,23 @@ MODE=${1:-}
 CLIENT_URL=${2:-}
 INSTALL_DIR=${INSTALL_DIR:-/opt/punters}
 KIOSK_USER=${KIOSK_USER:-kiosk}
-KIOSK_UID=$(id -u "$KIOSK_USER" 2>/dev/null || echo 1000)
+# Try to detect the autologin desktop user to ensure DISPLAY access
+AUTOLOGIN_USER=$(grep -h "^autologin-user=" /etc/lightdm/lightdm.conf 2>/dev/null | cut -d= -f2 | tail -1 || true)
+if [[ -z "$AUTOLOGIN_USER" ]]; then
+  AUTOLOGIN_USER=$(grep -h "^autologin-user=" /etc/lightdm/lightdm.conf.d/*.conf 2>/dev/null | cut -d= -f2 | tail -1 || true)
+fi
+
+# Choose target user: prefer autologin user if present; else kiosk if exists; else pi
+TARGET_USER="$KIOSK_USER"
+if [[ -n "$AUTOLOGIN_USER" ]]; then
+  TARGET_USER="$AUTOLOGIN_USER"
+elif id -u "$KIOSK_USER" >/dev/null 2>&1; then
+  TARGET_USER="$KIOSK_USER"
+elif id -u pi >/dev/null 2>&1; then
+  TARGET_USER=pi
+fi
+
+KIOSK_UID=$(id -u "$TARGET_USER" 2>/dev/null || echo 1000)
 CONFIG_FILE=/etc/default/punters-kiosk
 UNIT_FILE=/etc/systemd/system/punters-kiosk.service
 
@@ -67,9 +83,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=kiosk
+User=${TARGET_USER}
 Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/kiosk/.Xauthority
+Environment=XAUTHORITY=/home/${TARGET_USER}/.Xauthority
 Environment=CONFIG_FILE=/etc/default/punters-kiosk
 ExecStart=/usr/bin/env bash -lc '${INSTALL_DIR:-/opt/punters}/scripts/rpi-kiosk-launch.sh'
 Restart=always
@@ -87,8 +103,8 @@ UNIT
 
 # Replace kiosk user in the unit if different
 if [[ "$KIOSK_USER" != "kiosk" ]]; then
-  sed -i "s/^User=kiosk$/User=${KIOSK_USER}/" "$UNIT_FILE"
-  sed -i "s#/home/kiosk/#/home/${KIOSK_USER}/#" "$UNIT_FILE"
+  sed -i "s/^User=.*/User=${TARGET_USER}/" "$UNIT_FILE"
+  sed -i "s#XAUTHORITY=/home/.*/\.Xauthority#XAUTHORITY=/home/${TARGET_USER}/.Xauthority#" "$UNIT_FILE" || true
 fi
 
 # Hardwire INSTALL_DIR into ExecStart for reliability

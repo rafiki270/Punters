@@ -79,6 +79,7 @@ enable_remote_access() {
 }
 
 setup_user_autologin() {
+  # Create kiosk user and add to necessary groups; defer GUI autologin to rpi-force-autologin.sh
   if ! id -u "$KIOSK_USER" >/dev/null 2>&1; then
     adduser --disabled-password --gecos "" "$KIOSK_USER"
     if [ -n "${KIOSK_PASSWORD}" ]; then
@@ -87,35 +88,10 @@ setup_user_autologin() {
       passwd -d "$KIOSK_USER" || true
     fi
   fi
-  # Ensure required groups exist and add user
   for g in autologin video audio input netdev tty render; do
     getent group "$g" >/dev/null 2>&1 || groupadd "$g" || true
     usermod -a -G "$g" "$KIOSK_USER" || true
   done
-
-  # Ensure LightDM is present and enabled
-  apt-get install -y lightdm >/dev/null 2>&1 || true
-  systemctl enable lightdm || true
-  systemctl set-default graphical.target || true
-
-  # Determine desktop session for autologin
-  local SES=""
-  if [ -f /usr/share/wayland-sessions/wayfire.desktop ]; then
-    SES="wayfire"
-  elif [ -f /usr/share/xsessions/LXDE-pi.desktop ]; then
-    SES="LXDE-pi"
-  elif [ -f /usr/share/xsessions/LXDE.desktop ]; then
-    SES="LXDE"
-  fi
-
-  # Configure autologin for kiosk user
-  mkdir -p /etc/lightdm/lightdm.conf.d
-  {
-    echo "[Seat:*]"
-    echo "autologin-user=${KIOSK_USER}"
-    echo "autologin-user-timeout=0"
-    [ -n "$SES" ] && echo "autologin-session=${SES}"
-  } >/etc/lightdm/lightdm.conf.d/12-punters-autologin.conf
 }
 
 set_hostname() {
@@ -190,6 +166,15 @@ fi
 
 echo "\n== Fetching application =="
 clone_repo
+
+echo "\n== Forcing desktop autologin (kiosk) =="
+if [[ -x "$INSTALL_DIR/scripts/rpi-force-autologin.sh" ]]; then
+  KIOSK_USER="$KIOSK_USER" KIOSK_PASSWORD="$KIOSK_PASSWORD" bash "$INSTALL_DIR/scripts/rpi-force-autologin.sh"
+else
+  echo "force-autologin script not found in repo; fetching from GitHub..."
+  curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-force-autologin.sh" | \
+    KIOSK_USER="$KIOSK_USER" KIOSK_PASSWORD="$KIOSK_PASSWORD" bash
+fi
 
 echo "\n== Enabling autostart service =="
 enable_kiosk_service

@@ -6,6 +6,7 @@ HOST_PORT ?= 80
   docker-build docker-up docker-down docker-logs \
   launch launch80 launch-client update \
   pi-setup pi-launch pi-launch-client \
+  pi-force-autologin \
   check-api docker-toggle docker-publish-latest docker-release
 
 .DEFAULT_GOAL := help
@@ -55,6 +56,10 @@ pi-launch-client: ## Raspberry Pi: autostart fullscreen browser to URL at boot (
 	@if [ -z "$(URL)" ]; then echo "Set URL, e.g. make pi-launch-client URL=http://server:3000"; exit 1; fi
 	@echo "Enabling kiosk autostart (client mode) -> $(URL) ..." && \
 	sudo bash scripts/rpi-enable-kiosk.sh client "$(URL)"
+
+pi-force-autologin: ## Raspberry Pi: force GUI + TTY autologin to kiosk user (no password)
+	@echo "Forcing autologin to kiosk (requires sudo)..." && \
+	sudo bash scripts/rpi-force-autologin.sh
 
 # Convenience alias matching requested wording
 launch-client: pi-launch-client ## Alias: make launch-client URL=...

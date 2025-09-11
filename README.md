@@ -149,6 +149,7 @@ Factory reset
   - Client mode: Chromium opens to the URL you provide during install.
 - Update on Pi:
   - From `/opt/punters`: `make update` (adds migrations and rebuilds). Use `RESTART=1` to restart the kiosk service after building: `RESTART=1 make update`.
+  - If the desktop still logs into another user, run: `make pi-force-autologin` (forces LightDM and console autologin to `kiosk`).
 
 ## Contributing
 - Open issues or proposals based on REQUIREMENTS.md.
