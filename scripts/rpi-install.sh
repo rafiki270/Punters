@@ -81,7 +81,11 @@ setup_user_autologin() {
   if ! id -u "$KIOSK_USER" >/dev/null 2>&1; then
     adduser --disabled-password --gecos "" "$KIOSK_USER"
   fi
-  usermod -a -G autologin,video,audio,input,netdev,tty,render "$KIOSK_USER" || true
+  # Ensure required groups exist and add user
+  for g in autologin video audio input netdev tty render; do
+    getent group "$g" >/dev/null 2>&1 || groupadd "$g" || true
+    usermod -a -G "$g" "$KIOSK_USER" || true
+  done
 
   if command -v raspi-config >/dev/null 2>&1; then
     raspi-config nonint do_boot_behaviour B4 || true
@@ -113,13 +117,24 @@ set_hostname() {
 clone_repo() {
   if [[ -d "$INSTALL_DIR/.git" ]]; then
     echo "Repo exists in $INSTALL_DIR. Pulling latest..."
-    git -C "$INSTALL_DIR" pull --ff-only || true
+    chown -R "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR" || true
+    # Avoid git safe.directory warnings
+    git config --global --add safe.directory "$INSTALL_DIR" || true
+    sudo -u "$KIOSK_USER" git -C "$INSTALL_DIR" fetch --all --prune || true
+    if ! sudo -u "$KIOSK_USER" git -C "$INSTALL_DIR" reset --hard origin/main 2>/dev/null; then
+      sudo -u "$KIOSK_USER" git -C "$INSTALL_DIR" pull --ff-only || true
+    fi
   else
     echo "Cloning repo into $INSTALL_DIR ..."
     mkdir -p "$INSTALL_DIR"
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    chown "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR" || true
+    sudo -u "$KIOSK_USER" git clone "$REPO_URL" "$INSTALL_DIR"
   fi
   chown -R "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR"
+  # Ensure scripts are executable
+  if [[ -d "$INSTALL_DIR/scripts" ]]; then
+    chmod +x "$INSTALL_DIR"/scripts/*.sh 2>/dev/null || true
+  fi
 }
 
 enable_kiosk_service() {
