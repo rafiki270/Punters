@@ -152,13 +152,39 @@ BASHRC
   chmod 644 "$USER_HOME/.bash_profile"
   chown "$TARGET_USER:$TARGET_USER" "$USER_HOME/.bash_profile"
 
-  # Minimal X init to launch our kiosk launcher
-  cat >"$USER_HOME/.xinitrc" <<XRC
+  # Install a stable wrapper that reads INSTALL_DIR dynamically
+  WRAP_BIN=/usr/local/bin/punters-kiosk
+  cat >"$WRAP_BIN" <<'WRAP'
+#!/usr/bin/env bash
+set -euo pipefail
+CONFIG_FILE=${CONFIG_FILE:-/etc/default/punters-kiosk}
+MODE=server
+CLIENT_URL=""
+INSTALL_DIR=/opt/punters
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  . "$CONFIG_FILE"
+fi
+if [[ ! -x "$INSTALL_DIR/scripts/rpi-kiosk-launch.sh" ]]; then
+  echo "punters-kiosk: launcher not found at $INSTALL_DIR/scripts/rpi-kiosk-launch.sh" >&2
+  if [[ -x "/opt/punters/scripts/rpi-kiosk-launch.sh" ]]; then
+    INSTALL_DIR=/opt/punters
+  else
+    echo "punters-kiosk: cannot locate launcher; check INSTALL_DIR in $CONFIG_FILE" >&2
+    exit 1
+  fi
+fi
+exec "$INSTALL_DIR/scripts/rpi-kiosk-launch.sh"
+WRAP
+  chmod 755 "$WRAP_BIN"
+
+  # Minimal X init to launch the stable wrapper
+  cat >"$USER_HOME/.xinitrc" <<'XRC'
 #!/bin/sh
 # Minimal X session to launch kiosk. If it dies, .bash_profile restarts X.
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}
-exec $INSTALL_DIR/scripts/rpi-kiosk-launch.sh
+exec /usr/local/bin/punters-kiosk
 XRC
   chmod +x "$USER_HOME/.xinitrc"
   chown "$TARGET_USER:$TARGET_USER" "$USER_HOME/.xinitrc"

@@ -58,6 +58,11 @@ read_display_prefs() {
   local ans
   echo
   echo "Display setup:"
+  # If PIXEL_DOUBLE is preseeded (0/1), honor it and skip prompt
+  if [[ "${PIXEL_DOUBLE:-}" =~ ^[01]$ ]]; then
+    echo "PIXEL_DOUBLE is preset to ${PIXEL_DOUBLE}. Skipping 4K prompt."
+    return
+  fi
   while true; do
     read -rp "Is your TV/monitor 4K (UHD)? Enable pixel doubling for crisp 1080p? [Y/n]: " ans || true
     case "${ans:-}" in
