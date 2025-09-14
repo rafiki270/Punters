@@ -101,7 +101,7 @@ apt_install() {
   apt-get update -y
   apt-get install -y \
     git curl ca-certificates rsync x11-xserver-utils xdotool unclutter vim feh pcmanfm \
-    xterm \
+    xterm openbox make libcap2-bin \
     xserver-xorg xinit xserver-xorg-legacy \
     avahi-daemon \
     chromium-browser || true
@@ -113,6 +113,11 @@ apt_install() {
     echo "Installing Node.js 18 (NodeSource)"
     curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
     apt-get install -y nodejs
+  fi
+  # Allow Node.js to bind to port 80 without root
+  if command -v setcap >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+    NODE_BIN=$(command -v node)
+    setcap 'cap_net_bind_service=+ep' "$NODE_BIN" 2>/dev/null || true
   fi
 }
 

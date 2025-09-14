@@ -40,13 +40,19 @@ apt-get update -y
 # Utilities and browser
 apt-get install -y \
   git curl x11-xserver-utils xdotool unclutter vim feh pcmanfm \
-  xserver-xorg xinit xserver-xorg-legacy xterm openbox \
+  xserver-xorg xinit xserver-xorg-legacy xterm openbox make libcap2-bin \
   chromium-browser || true
 
 # On newer Raspberry Pi OS, package name may be 'chromium' (without -browser)
 # On newer Raspberry Pi OS, package name may be 'chromium' (without -browser)
 if ! command -v chromium-browser >/dev/null 2>&1; then
   apt-get install -y chromium || true
+fi
+
+# Allow Node.js to bind to port 80 without root
+if command -v setcap >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  NODE_BIN=$(command -v node)
+  setcap 'cap_net_bind_service=+ep' "$NODE_BIN" 2>/dev/null || true
 fi
 
 # Allow non-root users to start X (Xorg wrapper)

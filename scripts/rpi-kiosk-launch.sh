@@ -219,24 +219,21 @@ wait_for_http() {
 start_server() {
   cd "$INSTALL_DIR"
   echo "Working dir: $(pwd)"
-  # Install deps if needed
+  # Install deps if needed (root and web)
   if [[ ! -d node_modules ]]; then
-    echo "Installing dependencies..."
+    echo "Installing root dependencies..."
     (command -v npm >/dev/null 2>&1 && npm ci) || npm install
   fi
-  # Build if needed
-  if [[ ! -f dist/server.js ]]; then
-    echo "Building project..."
-    npm run build
+  if [[ ! -d web/node_modules ]]; then
+    echo "Installing web dependencies..."
+    (cd web && (npm ci || npm install))
   fi
-  echo "Starting server..."
-  # Force server to bind on port 80
-  export PORT=80
-  npm start &
+  echo "Starting dev servers on port 80 (make launch80) ..."
+  SKIP_INSTALL=1 make -s launch80 &
   SERVER_PID=$!
   trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
   echo "Waiting for healthcheck..."
-  wait_for_http "http://localhost:80/api/health" 90 || true
+  wait_for_http "http://localhost:80" 120 || true
 }
 
 launch_browser() {

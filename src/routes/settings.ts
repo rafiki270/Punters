@@ -26,6 +26,10 @@ const SettingsSchema = z.object({
   logoScale: z.coerce.number().int().min(10).max(300).optional(),
   bgPosition: z.enum(['center','top','bottom','left','right']).optional(),
   bgScale: z.coerce.number().int().min(50).max(300).optional(),
+  // Drinks-specific style defaults
+  drinksCellScale: z.coerce.number().int().min(0).max(100).optional(),
+  drinksItemsPerCol: z.coerce.number().int().min(1).max(200).optional(),
+  drinksIndentPct: z.coerce.number().int().min(0).max(30).optional(),
   // New style options
   logoBgEnabled: z.coerce.boolean().optional(),
   logoBgColor: z.string().min(1).max(20).optional(),

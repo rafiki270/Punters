@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 
-type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'drinks'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean }
+type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'drinks'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean; drinksCellScale?: number; drinksItemsPerCol?: number; drinksIndentPct?: number }
 type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number; volumeMl?: number } }
 type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[]; colorHex?: string|null }
 type TapBeer = { tapNumber: number; status: string; beer: Beer|null }
@@ -114,7 +114,22 @@ function Display() {
   useEffect(()=>{ try { localStorage.setItem('drinksCellScale', String(localDrinksCellScale)) } catch {} }, [localDrinksCellScale])
   // persist indent percentage
   useEffect(()=>{ try { localStorage.setItem('drinksIndentPct', String(localDrinksIndentPct)) } catch {} }, [localDrinksIndentPct])
+  // Local override toggles from localStorage
+  // Override flags as state so UI changes reflect immediately
+  const [beerOverrideFlag, setBeerOverrideFlag] = useState<boolean>(()=>{ try { return localStorage.getItem('beerLocalOverride')==='true' } catch { return false } })
+  const [drinksOverrideFlag, setDrinksOverrideFlag] = useState<boolean>(()=>{ try { return localStorage.getItem('drinksLocalOverride')==='true' } catch { return false } })
+  const beerLocalOverride = beerOverrideFlag
+  const drinksLocalOverride = drinksOverrideFlag
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // Local beer override live values (for immediate Display updates)
+  const [beerLocalCellScale, setBeerLocalCellScale] = useState<number>(()=>{
+    const v = Number(localStorage.getItem('beerLocal_cellScale')||'')
+    return Number.isFinite(v)?v:50
+  })
+  const [beerLocalColumns, setBeerLocalColumns] = useState<number>(()=>{
+    const v = Number(localStorage.getItem('beerLocal_columns')||'')
+    return Number.isFinite(v)&&v>=1?v:1
+  })
   // state for screen sync panel
   const [showSync, setShowSync] = useState(false)
   useEffect(() => { if (adminOpen) setShowSync(false) }, [adminOpen])
@@ -229,8 +244,22 @@ function Display() {
     } catch {}
   }
 
-  const columns = device?.beerColumns || settings?.beerColumns || 1
-  const itemsPerColumn = device?.itemsPerColumn || 10
+  // Effective beer style values
+  const effBeerCellScale = useMemo(() => {
+    if (beerLocalOverride) return beerLocalCellScale
+    return (device?.cellScale ?? settings?.cellScale ?? 50)
+  }, [beerLocalOverride, beerLocalCellScale, device?.cellScale, settings?.cellScale])
+  const effBeerColumns = useMemo(() => {
+    if (beerLocalOverride) return beerLocalColumns
+    return (device?.beerColumns || settings?.beerColumns || 1)
+  }, [beerLocalOverride, beerLocalColumns, device?.beerColumns, settings?.beerColumns])
+  const effBeerItemsPerCol = useMemo(() => {
+    if (beerLocalOverride) return localBeerItemsPerCol
+    return (device?.itemsPerColumn || localBeerItemsPerCol)
+  }, [beerLocalOverride, device?.itemsPerColumn, localBeerItemsPerCol])
+
+  const columns = effBeerColumns
+  const itemsPerColumn = effBeerItemsPerCol
 
   useEffect(() => { loadAll() }, [])
 
@@ -248,18 +277,34 @@ function Display() {
         }
       } catch {}
     }
-    const sock: Socket = io(url, { transports: ['websocket'], reconnection: true })
+    const sock: Socket = io(url || '', { path: '/socket.io', transports: ['websocket', 'polling'], reconnection: true })
     const onChanged = () => { loadAll() }
     const onTick = (p: { epoch: number }) => { try { setEpoch(p.epoch) } catch {} }
     const onSyncState = (p: { cycleOffset?: number; anchorMs?: number|null }) => {
       if (typeof p.cycleOffset === 'number') setCycleOffset(p.cycleOffset)
       if ('anchorMs' in p) setAnchorMs(p.anchorMs ?? null)
     }
+    const onConnect = () => { /* connected */ }
+    const onConnectError = () => { /* suppress noisy dev errors */ }
+    sock.on('connect', onConnect)
+    sock.on('connect_error', onConnectError)
     sock.on('changed', onChanged)
     sock.on('tick', onTick)
     sock.on('sync_state', onSyncState)
     socketRef.current = sock
-    return () => { try { sock.off('changed', onChanged); sock.off('tick', onTick); sock.off('sync_state', onSyncState); sock.close() } catch {} }
+    return () => {
+      try {
+        sock.off('connect', onConnect)
+        sock.off('connect_error', onConnectError)
+        sock.off('changed', onChanged)
+        sock.off('tick', onTick)
+        sock.off('sync_state', onSyncState)
+        // Only disconnect active sockets to avoid noisy browser errors
+        if (sock.connected) {
+          sock.disconnect()
+        }
+      } catch {}
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, remoteBase])
 
@@ -297,12 +342,30 @@ function Display() {
 
   // Build slides: beer pages then each ad image
   const beerPages: Array<Array<{ tapNumber: number; status: string; beer: Beer }>> = useMemo(() => {
-    const perCol = device?.itemsPerColumn || localBeerItemsPerCol
+    const perCol = effBeerItemsPerCol
     const perPage = Math.max(1, columns) * Math.max(1, perCol)
     const pages: Array<Array<{ tapNumber: number; status: string; beer: Beer }>> = []
     for (let i = 0; i < tapBeers.length; i += perPage) pages.push(tapBeers.slice(i, i + perPage))
     return pages.length ? pages : [[]]
-  }, [tapBeers, columns, itemsPerColumn, device?.itemsPerColumn, localBeerItemsPerCol])
+  }, [tapBeers, columns, effBeerItemsPerCol])
+
+  // Effective style values factoring local override toggles
+  const effDrinksCellScale = useMemo(() => {
+    if (drinksLocalOverride) return localDrinksCellScale
+    const s: any = settings || {}
+    return (typeof s.drinksCellScale === 'number' ? s.drinksCellScale : (s.cellScale ?? 50))
+  }, [drinksLocalOverride, localDrinksCellScale, settings])
+  const effDrinksItemsPerCol = useMemo(() => {
+    if (drinksLocalOverride) return localDrinksItemsPerCol
+    const s: any = settings || {}
+    return (typeof s.drinksItemsPerCol === 'number' && s.drinksItemsPerCol > 0) ? s.drinksItemsPerCol : (device?.itemsPerColumn || 10)
+  }, [drinksLocalOverride, localDrinksItemsPerCol, settings, device?.itemsPerColumn])
+  const effDrinksIndentPct = useMemo(() => {
+    if (drinksLocalOverride) return localDrinksIndentPct
+    const s: any = settings || {}
+    const v = s.drinksIndentPct
+    return (typeof v === 'number') ? Math.max(0, Math.min(30, v)) : 10
+  }, [drinksLocalOverride, localDrinksIndentPct, settings])
 
   const slides = useMemo(() => {
     type Slide = { type: 'beer'|'drinks'|'ad'|'adpair'; data: any }
@@ -319,7 +382,7 @@ function Display() {
       type Entry = { kind:'header'; name:string } | { kind:'item'; drink:any }
       const entries: Entry[] = []
       grouped.forEach(g => { entries.push({ kind:'header', name:g.name }); g.drinks.forEach((d:any)=> entries.push({ kind:'item', drink:d })) })
-      const perCol = Math.max(1, localDrinksItemsPerCol)
+      const perCol = Math.max(1, effDrinksItemsPerCol)
       const colCount = Math.max(1, columns)
       const perPage = perCol * colCount
       for (let i=0; i<entries.length; i+=perPage) {
@@ -357,7 +420,7 @@ function Display() {
       return (sl.type==='ad' || sl.type==='adpair')
     })
     return filtered.length ? filtered : [{ type: 'beer', data: [] }]
-  }, [beerPages, ads, drinks, drinkCategories, localDisplayMode, localShowDrinks, device?.displayMode, columns, localDrinksItemsPerCol])
+  }, [beerPages, ads, drinks, drinkCategories, localDisplayMode, localShowDrinks, device?.displayMode, columns, effDrinksItemsPerCol])
 
   // Derive synchronized page index when enabled
   const rotation = settings?.rotationSec ?? 90
@@ -376,7 +439,7 @@ function Display() {
   const contentBase = (mode==='client' && remoteBase) ? remoteBase : ''
   const bgUrl = settings?.backgroundPreset ? settings.backgroundPreset : (settings?.backgroundAssetId ? `${contentBase}/api/assets/${settings.backgroundAssetId}/content` : null)
   const logoUrl = settings?.logoAssetId ? `${contentBase}/api/assets/${settings.logoAssetId}/content` : null
-  const effCellScale = (device?.cellScale ?? settings?.cellScale ?? 50)
+  const effCellScale = effBeerCellScale
   const effColumnGap = (device?.columnGap ?? settings?.columnGap ?? 40)
   const effLogoPosition = (device?.logoPosition ?? settings?.logoPosition ?? 'top-center') as 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'
   const effLogoScale = (device?.logoScale ?? settings?.logoScale ?? 100)
@@ -554,7 +617,11 @@ function Display() {
           setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }}
           localDrinksIndentPct={localDrinksIndentPct}
           setLocalDrinksIndentPct={updateDrinksIndentPct}
-        
+          setBeerLocalCellScale={setBeerLocalCellScale}
+          setBeerLocalColumns={setBeerLocalColumns}
+          setBeerOverrideFlag={setBeerOverrideFlag}
+          setDrinksOverrideFlag={setDrinksOverrideFlag}
+
         />
       )}
       {mode==='client' && !remoteBase && (
@@ -697,7 +764,7 @@ function Display() {
                 {page.columns.map((col, ci) => (
                   <div key={`col-${ci}`} className="space-y-2">
                     {col.map((e, idx) => e.kind==='header' ? (
-                      <div key={`hdr-${ci}-${idx}`} className="font-bold mt-2" style={{ fontSize: Math.max(18, Math.round(30 * (localDrinksCellScale/50))) }}>{e.name}</div>
+                      <div key={`hdr-${ci}-${idx}`} className="font-bold mt-2" style={{ fontSize: Math.max(18, Math.round(30 * (effDrinksCellScale/50))) }}>{e.name}</div>
                     ) : (
                       <div key={`itm-${ci}-${idx}`} className="mb-3 border-b border-neutral-800/40 pb-1">
                         <div className="flex items-start justify-between gap-3">
@@ -707,7 +774,7 @@ function Display() {
                                 <img src={`${contentBase}/api/assets/${e.drink.logoAssetId}/content`} alt={e.drink.name} className="h-full w-full object-contain" />
                               </div>
                               <div className="min-w-0 pl-[18px]">
-                                <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (localDrinksCellScale/50))) }}>{e.drink.name}</div>
+                                <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (effDrinksCellScale/50))) }}>{e.drink.name}</div>
                                 {(() => {
                                   const d = e.drink
                                   const parts: string[] = []
@@ -715,16 +782,16 @@ function Display() {
                                   if (d.style) parts.push(String(d.style))
                                   if (d.origin) parts.push(String(d.origin))
                                   if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
-                                  return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
+                                  return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (effDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
                                 })()}
                                 {e.drink.description ? (
-                                  <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{e.drink.description}</div>
+                                  <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (effDrinksCellScale/50))) }}>{e.drink.description}</div>
                                 ) : null}
                               </div>
                             </div>
                           ) : (
-                            <div className="min-w-0 flex-1" style={{ paddingLeft: `calc(${localDrinksIndentPct}% + 18px)` }}>
-                              <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (localDrinksCellScale/50))) }}>{e.drink.name}</div>
+                            <div className="min-w-0 flex-1" style={{ paddingLeft: `calc(${effDrinksIndentPct}% + 18px)` }}>
+                              <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (effDrinksCellScale/50))) }}>{e.drink.name}</div>
                               {(() => {
                                 const d = e.drink
                                 const parts: string[] = []
@@ -732,10 +799,10 @@ function Display() {
                                 if (d.style) parts.push(String(d.style))
                                 if (d.origin) parts.push(String(d.origin))
                                 if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
-                                return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
+                                return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (effDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
                               })()}
                               {e.drink.description ? (
-                                <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (localDrinksCellScale/50))) }}>{e.drink.description}</div>
+                                <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (effDrinksCellScale/50))) }}>{e.drink.description}</div>
                               ) : null}
                             </div>
                           )}
@@ -744,7 +811,7 @@ function Display() {
                               .filter((p:any)=> (p.amountMinor||0)>0 && sizeMap.get(p.serveSizeId)?.forDrinks !== false)
                               .sort((a:any,b:any)=> (sizeMap.get(a.serveSizeId)?.displayOrder||0) - (sizeMap.get(b.serveSizeId)?.displayOrder||0))
                               .map((p:any, pi:number) => (
-                                <div key={`pr-${e.drink.id}-${p.serveSizeId}-${pi}`} style={{ fontSize: Math.max(10, Math.round(14 * (localDrinksCellScale/50))) }}>
+                                <div key={`pr-${e.drink.id}-${p.serveSizeId}-${pi}`} style={{ fontSize: Math.max(10, Math.round(14 * (effDrinksCellScale/50))) }}>
                                   <span className="opacity-70">{sizeMap.get(p.serveSizeId)?.name}</span>
                                   <span className="mx-1">-</span>
                                   <span className="font-semibold">{formatMoney(p.amountMinor, p.currency)}</span>
@@ -799,7 +866,7 @@ export default function App() {
 }
 
 // ----- Admin Overlay Components -----
-function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localShowDrinks, setLocalShowDrinks, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setLocalDrinksIndentPct }: { isOpen: boolean; sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'drinks'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'drinks'|'ads')=>void; localShowDrinks: boolean; setLocalShowDrinks: (v:boolean)=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setLocalDrinksIndentPct: (n:number)=>void }) {
+function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localShowDrinks, setLocalShowDrinks, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setLocalDrinksIndentPct, setBeerLocalCellScale, setBeerLocalColumns, setBeerOverrideFlag, setDrinksOverrideFlag }: { isOpen: boolean; sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'drinks'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'drinks'|'ads')=>void; localShowDrinks: boolean; setLocalShowDrinks: (v:boolean)=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setLocalDrinksIndentPct: (n:number)=>void; setBeerLocalCellScale: (n:number)=>void; setBeerLocalColumns: (n:number)=>void; setBeerOverrideFlag: (v:boolean)=>void; setDrinksOverrideFlag: (v:boolean)=>void }) {
   const [uiMode, setUiMode] = useState<'server'|'client'>(mode)
   const tabs: Array<{key: string; label: string}> = [
     { key: 'settings', label: 'Settings' },
@@ -851,7 +918,7 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
             <button onClick={onClose} className="px-3 py-1.5 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Close</button>
           </div>
         {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={async()=>{ await onRefresh(); setUiMode((await fetch('/api/mode').then(r=>r.json()).catch(()=>({mode}))).mode) }} localDisplayMode={localDisplayMode} setLocalDisplayMode={setLocalDisplayMode} localShowDrinks={localShowDrinks} setLocalShowDrinks={setLocalShowDrinks} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={setLocalDrinksCellScale} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={setLocalDrinksItemsPerCol} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={setLocalBeerItemsPerCol} servers={servers} remoteBase={remoteBase} onSelectServer={onSelectServer} onLocalModeChange={(m)=>{ setUiMode(m); }} />}
-        {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={onRefresh} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} localDrinksIndentPct={localDrinksIndentPct} setDrinksIndent={setLocalDrinksIndentPct} />}
+        {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={onRefresh} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} localDrinksIndentPct={localDrinksIndentPct} setDrinksIndent={setLocalDrinksIndentPct} setBeerLocalCellScale={setBeerLocalCellScale} setBeerLocalColumns={setBeerLocalColumns} setBeerOverrideFlag={setBeerOverrideFlag} setDrinksOverrideFlag={setDrinksOverrideFlag} />}
         {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={onRefresh} />}
@@ -968,7 +1035,7 @@ function ServerPanel({ servers, remoteBase, onSelectServer }: { servers: Discove
   )
 }
 
-function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setDrinksIndent }: { settings: Settings|null; onRefresh: () => void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setDrinksIndent: (n:number)=>void }) {
+function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setDrinksIndent, setBeerLocalCellScale = () => {}, setBeerLocalColumns = () => {}, setBeerOverrideFlag = () => {}, setDrinksOverrideFlag = () => {} }: { settings: Settings|null; onRefresh: () => void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setDrinksIndent: (n:number)=>void; setBeerLocalCellScale?: (n:number)=>void; setBeerLocalColumns?: (n:number)=>void; setBeerOverrideFlag?: (v:boolean)=>void; setDrinksOverrideFlag?: (v:boolean)=>void }) {
   const [theme, setTheme] = useState<'light'|'dark'>(settings?.themeMode || 'dark')
   const [logoPreview, setLogoPreview] = useState<string | null>(settings?.logoAssetId ? `/api/assets/${settings.logoAssetId}/content` : null)
   const [bgPreview, setBgPreview] = useState<string | null>(settings?.backgroundAssetId ? `/api/assets/${settings.backgroundAssetId}/content` : null)
@@ -991,13 +1058,48 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
   const [showFooter, setShowFooter] = useState<boolean>((settings as any)?.showFooter ?? true)
   const [localLogoPadX, setLocalLogoPadX] = useState<number>((settings as any)?.logoPadX ?? 8)
   const [localLogoPadY, setLocalLogoPadY] = useState<number>((settings as any)?.logoPadY ?? 8)
+  // Per-group local override toggles
+  const [beerOverride, setBeerOverride] = useState<boolean>(()=>{ try { return localStorage.getItem('beerLocalOverride')==='true' } catch { return false } })
+  const [drinksOverride, setDrinksOverride] = useState<boolean>(()=>{ try { return localStorage.getItem('drinksLocalOverride')==='true' } catch { return false } })
   useEffect(()=>{ if (settings) { setTheme(settings.themeMode); setLogoPreview(settings.logoAssetId?`/api/assets/${settings.logoAssetId}/content`:null); setBgPreview(settings.backgroundAssetId?`/api/assets/${settings.backgroundAssetId}/content`:null); setLocalCellScale((settings as any).cellScale ?? 50); setLocalColumnGap((settings as any).columnGap ?? 40); setLocalBeerColumns((settings as any).beerColumns ?? 1); setLocalItemsPerPage((settings as any).itemsPerPage ?? 10); setLocalLogoPosition(((settings as any).logoPosition as any) ?? 'top-center'); setLocalLogoScale((settings as any).logoScale ?? 100); setLocalBgPosition(((settings as any).bgPosition as any) ?? 'center'); setLocalBgScale((settings as any).bgScale ?? 100); setBgPresetSel(((settings as any)?.backgroundPreset as string) ?? 'custom') } },[settings])
+  // When override is enabled, prefer local-saved values for beer fields
+  useEffect(() => {
+    if (!settings) return
+    if (beerOverride) {
+      const ls = Number(localStorage.getItem('beerLocal_cellScale')||'')
+      const lc = Number(localStorage.getItem('beerLocal_columns')||'')
+      if (Number.isFinite(ls)) setLocalCellScale(ls)
+      if (Number.isFinite(lc) && lc>=1) setLocalBeerColumns(lc)
+    }
+  }, [beerOverride, settings])
   useEffect(()=>{ if (settings) { setLogoBgEnabled((settings as any).logoBgEnabled ?? false); setLogoBgColor((settings as any).logoBgColor ?? '#000000'); setLogoBgRounded((settings as any).logoBgRounded ?? false); setLogoBgRadius((settings as any).logoBgRadius ?? 15); setLocalBgOpacity((settings as any).bgOpacity ?? 100); setLocalPageBgColor((settings as any).pageBgColor ?? '#000000'); setShowFooter((settings as any).showFooter ?? true) } }, [settings])
   useEffect(()=>{ fetch('/api/backgrounds').then(r=>r.json()).then(setBgPresets).catch(()=>setBgPresets([])) }, [])
+  // Reflect server drinks values into UI controls when override is OFF and not actively saving
+  useEffect(()=>{
+    if (!settings || drinksOverride || savingDrinksRef.current) return
+    const s: any = settings
+    if (typeof s.drinksCellScale === 'number' && s.drinksCellScale !== localDrinksCellScale) setLocalDrinksCellScale(s.drinksCellScale)
+    if (typeof s.drinksItemsPerCol === 'number' && s.drinksItemsPerCol>0 && s.drinksItemsPerCol !== localDrinksItemsPerCol) setLocalDrinksItemsPerCol(s.drinksItemsPerCol)
+    if (typeof s.drinksIndentPct === 'number') {
+      const v = Math.max(0, Math.min(30, s.drinksIndentPct))
+      if (v !== localDrinksIndentPct) setDrinksIndent(v)
+    }
+  }, [settings, drinksOverride, localDrinksCellScale, localDrinksItemsPerCol, localDrinksIndentPct])
   useEffect(()=>{ if (settings) { setLocalLogoPadX((settings as any).logoPadX ?? 8); setLocalLogoPadY((settings as any).logoPadY ?? 8) } }, [settings])
+  // When drinks override is OFF, reflect server values in the UI controls,
+  // but avoid clobbering user edits while a save is in flight.
+  const savingDrinksRef = useRef(false)
 
   const saveTheme = async () => {
-    await fetch('/api/settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    const apiBase = (() => {
+      try {
+        const m = (settings as any)?.mode as 'server'|'client'|undefined
+        const remote = localStorage.getItem('remoteServer') || ''
+        if (m === 'client' && remote) return remote
+      } catch {}
+      return ''
+    })()
+    const base: any = {
       themeMode: theme,
       rotationSec: settings?.rotationSec ?? 90,
       defaultDisplayMode: settings?.defaultDisplayMode ?? 'all',
@@ -1008,7 +1110,6 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
       backgroundAssetId: settings?.backgroundAssetId ?? null,
       backgroundPreset: bgPresetSel==='custom' ? null : bgPresetSel,
       // style defaults
-      cellScale: localCellScale,
       columnGap: localColumnGap,
       logoPosition: localLogoPosition,
       logoScale: localLogoScale,
@@ -1023,10 +1124,31 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
       showFooter,
       logoPadX: localLogoPadX,
       logoPadY: localLogoPadY,
-      beerColumns: localBeerColumns,
       itemsPerPage: localItemsPerPage,
-    }) })
-    await onRefresh()
+    }
+    // Only persist beer cell scale/columns to server when not locally overridden
+    if (!beerOverride) {
+      base.cellScale = localCellScale
+      base.beerColumns = localBeerColumns
+    }
+    // Persist drinks styles to server when not locally overridden
+    if (!drinksOverride) {
+      savingDrinksRef.current = true
+      base.drinksCellScale = localDrinksCellScale
+      base.drinksItemsPerCol = localDrinksItemsPerCol
+      base.drinksIndentPct = localDrinksIndentPct
+    }
+    try {
+      const res = await fetch(`${apiBase}/api/settings`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(base) })
+      if (!res.ok) {
+        const msg = await res.text().catch(()=> '')
+        alert(msg || 'Failed to save settings')
+        return
+      }
+      await onRefresh()
+    } finally {
+      savingDrinksRef.current = false
+    }
   }
 
   // Auto-save on change (debounced)
@@ -1034,9 +1156,9 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
   useEffect(() => {
     if (!settings) return
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
-    saveTimer.current = window.setTimeout(() => { saveTheme() }, 600)
+    saveTimer.current = window.setTimeout(() => { saveTheme() }, 700)
     return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current) }
-  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localItemsPerPage, localLogoPadX, localLogoPadY, localPageBgColor, bgPresetSel, showFooter])
+  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localItemsPerPage, localLogoPadX, localLogoPadY, localPageBgColor, bgPresetSel, showFooter, localDrinksCellScale, localDrinksItemsPerCol, localDrinksIndentPct, drinksOverride])
 
   const uploadAndSet = async (kind: 'logo'|'background', file: File) => {
     const fd = new FormData(); fd.append('file', file); fd.append('tag', kind==='logo'?'style:logo':'style:background')
@@ -1091,28 +1213,40 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
       {/* Beer/Drinks controls */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
-          <div className="font-semibold mb-2">Beer Display</div>
+          <div className="font-semibold mb-2 flex items-center justify-between">
+            <span>Beer Display</span>
+            <label className="text-xs flex items-center gap-2">
+              <input type="checkbox" checked={beerOverride} onChange={(e)=>{ const v=e.target.checked; setBeerOverride(v); try{ localStorage.setItem('beerLocalOverride', String(v)); if (v) { localStorage.setItem('beerLocal_cellScale', String(localCellScale)); localStorage.setItem('beerLocal_columns', String(localBeerColumns)); setBeerLocalCellScale(localCellScale); setBeerLocalColumns(localBeerColumns); } }catch{}; setBeerOverrideFlag(v); onRefresh() }} />
+              Use local override
+            </label>
+          </div>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm mb-1">Beer Cell Scale (default)</label>
-              <input type="range" min={0} max={100} value={localCellScale} onChange={e=>setLocalCellScale(Number(e.target.value))} className="w-60" />
+              <label className="block text-sm mb-1">Beer Cell Scale {beerOverride ? '(local override)' : '(default)'}</label>
+              <input type="range" min={0} max={100} value={localCellScale} onChange={e=>{ const n=Number(e.target.value); setLocalCellScale(n); if (beerOverride) { try{ localStorage.setItem('beerLocal_cellScale', String(n)) }catch{}; setBeerLocalCellScale(n) } }} className="w-60" />
               <div className="text-xs opacity-70 mt-1">{localCellScale}% — controls image and typography scale.</div>
             </div>
             <div>
-              <label className="block text-sm mb-1">Beer Columns (default)</label>
-              <input type="number" min={1} max={6} value={localBeerColumns} onChange={e=>setLocalBeerColumns(Math.max(1, Math.min(6, Number(e.target.value)||1)))} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+              <label className="block text-sm mb-1">Beer Columns {beerOverride ? '(local override)' : '(default)'}</label>
+              <input type="number" min={1} max={6} value={localBeerColumns} onChange={e=>{ const n=Math.max(1, Math.min(6, Number(e.target.value)||1)); setLocalBeerColumns(n); if (beerOverride) { try{ localStorage.setItem('beerLocal_columns', String(n)) }catch{}; setBeerLocalColumns(n) } }} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
             </div>
             <div>
               <label className="block text-sm mb-1">Beer Items per Column (local)</label>
               <input type="number" min={1} max={50} value={Number.isFinite(localBeerItemsPerCol as any) ? localBeerItemsPerCol : 10} onChange={e=>{ const n=Math.max(1, Math.min(50, Number(e.target.value)||1)); setLocalBeerItemsPerCol(n); try{localStorage.setItem('beerItemsPerCol', String(n))}catch{} }} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
-            </div>
+              </div>
           </div>
         </div>
         <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
-          <div className="font-semibold mb-2">Drinks Display</div>
+          <div className="font-semibold mb-2 flex items-center justify-between">
+            <span>Drinks Display</span>
+            <label className="text-xs flex items-center gap-2">
+              <input type="checkbox" checked={drinksOverride} onChange={(e)=>{ const v=e.target.checked; setDrinksOverride(v); try{ localStorage.setItem('drinksLocalOverride', String(v)); if (v) { localStorage.setItem('drinksCellScale', String(localDrinksCellScale)); localStorage.setItem('drinksItemsPerCol', String(localDrinksItemsPerCol)); localStorage.setItem('drinksIndentPct', String(localDrinksIndentPct)); } }catch{}; setDrinksOverrideFlag(v); onRefresh() }} />
+              Use local override
+            </label>
+          </div>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm mb-1">Drinks Cell Scale (default)</label>
+              <label className="block text-sm mb-1">Drinks Cell Scale {drinksOverride ? '(local override)' : '(default)'}</label>
               <input type="range" min={0} max={100} value={localDrinksCellScale} onChange={e=>setLocalDrinksCellScale(Number(e.target.value))} className="w-60" />
               <div className="text-xs opacity-70 mt-1">{localDrinksCellScale}% — controls drinks typography scale.</div>
             </div>

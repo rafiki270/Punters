@@ -138,19 +138,45 @@ Factory reset
 
 ## Raspberry Pi
 - One-line interactive install (choose Server or Client):
-  - `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-install.sh)"`
-- Server mode:
-  - Runs the app locally, binds to port 80, and autostarts Chromium fullscreen to `http://localhost` at boot.
-  - Prompts for a hostname (defaults to `punters`) and enables mDNS, so you can reach it via `http://<hostname>.local`.
-- Client mode:
-  - Prompts for the server URL (e.g., `http://punters.local`) and autostarts Chromium fullscreen to that URL at boot.
-- URLs after install:
-  - Server mode: `http://<hostname>.local/` (defaults to `http://punters.local/`), API health at `http://<hostname>.local/api/health`.
-  - Client mode: Chromium opens to the URL you provide during install.
-- Update on Pi:
-  - From `/opt/punters`: `make update` (adds migrations and rebuilds). Use `RESTART=1` to restart the kiosk service after building: `RESTART=1 make update`.
-  - If the desktop still logs into another user, run: `make pi-force-autologin` (forces LightDM and console autologin to `kiosk`).
-- During install, you’ll be asked if the TV is 4K. Answer “y” to enable pixel doubling so the 1080p kiosk looks crisp on UHD panels.
+  - `sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-install.sh)"`
+
+What it sets up
+- Console kiosk: boots to TTY1, autologins a kiosk user, starts Xorg + a tiny WM (Openbox) + Chromium fullscreen.
+- Installs Node.js 18+, npm, Chromium, git, and helpers.
+- Clones/updates this repo at `INSTALL_DIR` (default `/opt/punters`) and writes `/etc/default/punters-kiosk`.
+- Client mode: opens Chromium to your remote URL.
+- Server mode: runs `make launch80` locally (web on port 80) and opens Chromium to `http://localhost`.
+
+Common installer options (env)
+- `INSTALL_DIR=/opt/punters` — target directory (default shown).
+- `PIXEL_DOUBLE=1` — default Yes for 4K crispness.
+- `SKIP_SPLASH=1` — skip and remove Plymouth splash for faster boots.
+- `ENABLE_VNC=0` — VNC off by default; set `1` to enable.
+- `KIOSK_USER=kiosk` — user for autologin.
+
+Examples
+- Fast client install (no splash/VNC):
+  - `sudo SKIP_SPLASH=1 ENABLE_VNC=0 PIXEL_DOUBLE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-install.sh)"`
+- Explicit install dir:
+  - `sudo INSTALL_DIR=/opt/punters /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-install.sh)"`
+
+Switching modes later (no reinstall)
+- Client (point to server):
+  - Local repo: `sudo KIOSK_USER=kiosk bash /opt/punters/scripts/rpi-enable-kiosk.sh client http://server.local`
+  - Remote: `curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-enable-kiosk.sh | sudo KIOSK_USER=kiosk bash -s -- client http://server.local`
+- Server: `sudo KIOSK_USER=kiosk bash /opt/punters/scripts/rpi-enable-kiosk.sh server`
+- Config file: `/etc/default/punters-kiosk` (fields: `MODE`, `CLIENT_URL`, `INSTALL_DIR`).
+
+Display tuning
+- Force mode/rate: add to `/etc/default/punters-kiosk`:
+  - `FORCE_MODE=1920x1080` and `FORCE_RATE=60` (often best for TVs), or `FORCE_MODE=3840x2160` for 4K.
+- 4K UI scale: `BROWSER_FLAGS="--high-dpi-support=1 --force-device-scale-factor=2"`.
+
+Logs and troubleshooting
+- Kiosk log: `~/.local/share/punters/kiosk.log` (or `/tmp/punters/kiosk.log`) for the autologin user.
+- X startup: `~/.local/share/punters/startx.log` (or `/tmp/punters/startx.log`).
+- Disable VNC overlay if not needed: `sudo systemctl disable --now vncserver-x11-serviced`.
+- Remove old boot splash: `sudo bash /opt/punters/scripts/rpi-remove-splash.sh`.
 
 ## Contributing
 - Open issues or proposals based on REQUIREMENTS.md.

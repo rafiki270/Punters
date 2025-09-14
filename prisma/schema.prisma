@@ -44,6 +44,10 @@ model GlobalSettings {
   hideLogoOnAds      Boolean  @default(false)
   beerColumns        Int      @default(1)
   itemsPerPage       Int      @default(10)
+  // Drinks-specific style defaults
+  drinksCellScale    Int      @default(50)
+  drinksItemsPerCol  Int      @default(10)
+  drinksIndentPct    Int      @default(10)
   updatedAt          DateTime @updatedAt
 }
 
