@@ -40,7 +40,7 @@ apt-get update -y
 # Utilities and browser
 apt-get install -y \
   git curl x11-xserver-utils xdotool unclutter vim feh pcmanfm \
-  xserver-xorg xinit xserver-xorg-legacy \
+  xserver-xorg xinit xserver-xorg-legacy xterm \
   chromium-browser || true
 
 # On newer Raspberry Pi OS, package name may be 'chromium' (without -browser)

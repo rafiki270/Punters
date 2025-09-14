@@ -79,7 +79,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y >/dev/null 2>&1 || true
 apt-get install -y --no-install-recommends \
   xserver-xorg x11-xserver-utils xinit xserver-xorg-legacy \
-  unclutter \
+  unclutter xterm \
   chromium-browser >/dev/null 2>&1 || true
 if ! command -v chromium-browser >/dev/null 2>&1; then
   apt-get install -y chromium >/dev/null 2>&1 || true
@@ -109,6 +109,7 @@ if [[ -n "$USER_HOME" ]]; then
   mkdir -p "$USER_HOME"
   # Start X on login at tty1
   mkdir -p "$USER_HOME/.local/share/punters" 2>/dev/null || true
+  chown -R "$TARGET_USER:$TARGET_USER" "$USER_HOME/.local" 2>/dev/null || true
   cat >"$USER_HOME/.bash_profile" <<'BASHRC'
 #!/usr/bin/env bash
 # Auto-start X on TTY1 and keep retrying with logs to avoid login flicker.
@@ -118,11 +119,17 @@ if [[ -z "$DISPLAY" && "$(tty)" == "/dev/tty1" ]]; then
   LOG_DIR="$HOME/.local/share/punters"
   LOG_FILE="$LOG_DIR/startx.log"
   mkdir -p "$LOG_DIR" 2>/dev/null || true
+  # Fallback to /tmp if log file is not writable
+  if ! (touch "$LOG_FILE" >/dev/null 2>&1); then
+    LOG_DIR="/tmp/punters"
+    mkdir -p "$LOG_DIR" 2>/dev/null || true
+    LOG_FILE="$LOG_DIR/startx.log"
+  fi
   while true; do
-    echo "[punters] launching startx at $(date)" | tee -a "$LOG_FILE"
+    echo "[punters] launching startx at $(date)" >> "$LOG_FILE"
     startx -- -keeptty -nocursor vt1 >> "$LOG_FILE" 2>&1
     rc=$?
-    echo "[punters] X exited rc=$rc at $(date). Restarting in 5s..." | tee -a "$LOG_FILE"
+    echo "[punters] X exited rc=$rc at $(date). Restarting in 5s..." >> "$LOG_FILE"
     sleep 5
   done
 fi
@@ -146,6 +153,13 @@ fi
 for dm in lightdm gdm3 sddm; do
   if systemctl is-enabled --quiet "$dm" 2>/dev/null; then
     systemctl disable --now "$dm" || true
+  fi
+done
+
+# Ensure target user is in common graphics/input groups
+for g in video render input tty; do
+  if getent group "$g" >/dev/null 2>&1; then
+    usermod -a -G "$g" "$TARGET_USER" || true
   fi
 done
 

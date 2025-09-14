@@ -69,6 +69,7 @@ apt_install() {
   apt-get update -y
   apt-get install -y \
     git curl ca-certificates rsync x11-xserver-utils xdotool unclutter vim feh pcmanfm \
+    xterm \
     xserver-xorg xinit xserver-xorg-legacy \
     avahi-daemon \
     chromium-browser || true
