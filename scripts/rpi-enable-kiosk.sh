@@ -92,7 +92,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y >/dev/null 2>&1 || true
 apt-get install -y --no-install-recommends \
   xserver-xorg x11-xserver-utils xinit xserver-xorg-legacy \
-  unclutter xterm \
+  openbox unclutter xterm \
   chromium-browser >/dev/null 2>&1 || true
 if ! command -v chromium-browser >/dev/null 2>&1; then
   apt-get install -y chromium >/dev/null 2>&1 || true
@@ -190,6 +190,12 @@ WRAP
 # Minimal X session to launch kiosk. If it dies, .bash_profile restarts X.
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}
+# Start a lightweight window manager to ensure proper fullscreen behavior
+if command -v openbox-session >/dev/null 2>&1; then
+  openbox-session &
+  # give it a moment to start
+  sleep 0.3
+fi
 exec /usr/local/bin/punters-kiosk
 XRC
   chmod +x "$USER_HOME/.xinitrc"

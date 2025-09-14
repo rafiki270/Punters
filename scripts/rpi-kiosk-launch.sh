@@ -249,6 +249,15 @@ launch_browser() {
     --disk-cache-dir="/dev/shm/chromium-cache"
     --overscroll-history-navigation=0
   )
+  # Derive current screen size and force Chromium window to fill it
+  local cur_mode
+  cur_mode=$(xrandr --query 2>/dev/null | awk '/\*/{print $1; exit}')
+  if [[ "$cur_mode" =~ ^([0-9]+)x([0-9]+)$ ]]; then
+    local sw=${BASH_REMATCH[1]}
+    local sh=${BASH_REMATCH[2]}
+    flags+=(--window-position=0,0 --window-size=${sw},${sh} --start-fullscreen --start-maximized)
+    log "chromium: window-size=${sw}x${sh}"
+  fi
   # If running under Wayland, enable Ozone/Wayland. Otherwise stick to X11 defaults.
   if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
     flags+=(--enable-features=UseOzonePlatform --ozone-platform=wayland)
