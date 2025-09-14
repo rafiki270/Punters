@@ -74,39 +74,68 @@ CLIENT_URL=${CLIENT_URL}
 INSTALL_DIR=${INSTALL_DIR}
 CFG
 
-echo "[3/4] Installing LightDM X session for Chromium-only kiosk"
-# Ensure LightDM is present and enabled
+echo "[3/4] Installing minimal X stack (xorg + xinit) for console kiosk"
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -y >/dev/null 2>&1 || true
-apt-get install -y lightdm >/dev/null 2>&1 || true
-systemctl enable lightdm || true
-systemctl set-default graphical.target || true
-
-# Create X session that runs only our launcher script
-SESSION_DESKTOP=/usr/share/xsessions/punters-kiosk.desktop
-cat >"$SESSION_DESKTOP" <<DESK
-[Desktop Entry]
-Name=Punters Kiosk
-Comment=Chromium fullscreen kiosk session
-Exec=/usr/bin/env bash -lc '$INSTALL_DIR/scripts/rpi-kiosk-launch.sh'
-Type=Application
-DesktopNames=punters-kiosk
-X-LightDM-DesktopName=punters-kiosk
-DESK
-
-# Configure LightDM to autologin into our kiosk session
-mkdir -p /etc/lightdm/lightdm.conf.d
-cat >/etc/lightdm/lightdm.conf.d/99-punters-kiosk.conf <<LDM
-[Seat:*]
-autologin-user=$TARGET_USER
-autologin-user-timeout=0
-autologin-session=punters-kiosk
-LDM
-
-# If an old systemd unit exists, disable it to avoid duplication
-if systemctl is-enabled --quiet punters-kiosk.service 2>/dev/null; then
-  systemctl disable --now punters-kiosk.service || true
+apt-get install -y --no-install-recommends \
+  xserver-xorg x11-xserver-utils xinit xserver-xorg-legacy \
+  unclutter \
+  chromium-browser >/dev/null 2>&1 || true
+if ! command -v chromium-browser >/dev/null 2>&1; then
+  apt-get install -y chromium >/dev/null 2>&1 || true
 fi
 
-echo "[4/4] Kiosk session installed. Reboot to start kiosk."
+# Allow non-root users to start X (Xorg wrapper)
+if [[ -f /etc/Xwrapper.config ]]; then
+  sed -i -E 's/^allowed_users=.*/allowed_users=anybody/' /etc/Xwrapper.config || true
+else
+  echo -e "allowed_users=anybody\nneeds_root_rights=auto" >/etc/Xwrapper.config
+fi
+
+echo "Configuring TTY1 autologin for $TARGET_USER (console kiosk)"
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+cat >/etc/systemd/system/getty@tty1.service.d/override.conf <<OVR
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $TARGET_USER --noclear %I \$TERM
+OVR
+systemctl daemon-reload
+systemctl enable getty@tty1 || true
+systemctl set-default multi-user.target || true
+
+# Write user startup files to launch X + kiosk on login to tty1
+USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+if [[ -n "$USER_HOME" ]]; then
+  mkdir -p "$USER_HOME"
+  # Start X on login at tty1
+  cat >"$USER_HOME/.bash_profile" <<'BASHRC'
+#!/usr/bin/env bash
+if [[ -z "$DISPLAY" && "$(tty)" == "/dev/tty1" ]]; then
+  # Ensure XDG_RUNTIME_DIR is set for the user
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true
+  exec startx -- -nocursor
+fi
+BASHRC
+  chmod 644 "$USER_HOME/.bash_profile"
+  chown "$TARGET_USER:$TARGET_USER" "$USER_HOME/.bash_profile"
+
+  # Minimal X init to launch our kiosk launcher
+  cat >"$USER_HOME/.xinitrc" <<XRC
+#!/bin/sh
+exec $INSTALL_DIR/scripts/rpi-kiosk-launch.sh
+XRC
+  chmod +x "$USER_HOME/.xinitrc"
+  chown "$TARGET_USER:$TARGET_USER" "$USER_HOME/.xinitrc"
+fi
+
+# Disable any desktop display manager to avoid loading full OS
+for dm in lightdm gdm3 sddm; do
+  if systemctl is-enabled --quiet "$dm" 2>/dev/null; then
+    systemctl disable --now "$dm" || true
+  fi
+done
+
+echo "[4/4] Console kiosk configured. On reboot, it autologins TTY1 and starts Chromium."
 
 echo "Done. Reboot to test kiosk autostart: sudo reboot"

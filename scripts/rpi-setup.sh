@@ -34,18 +34,26 @@ for g in "${groups[@]}"; do
   usermod -a -G "$g_trim" "$KIOSK_USER" || true
 done
 
-echo "[2/5] Updating apt and installing packages (git, Node.js 18, Chromium, VNC, utilities, vim)"
+echo "[2/5] Updating apt and installing packages (git, Node.js 18, Chromium, minimal X, VNC, utilities, vim)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 # Utilities and browser
 apt-get install -y \
   git curl x11-xserver-utils xdotool unclutter vim feh pcmanfm \
+  xserver-xorg xinit xserver-xorg-legacy \
   chromium-browser || true
 
 # On newer Raspberry Pi OS, package name may be 'chromium' (without -browser)
 # On newer Raspberry Pi OS, package name may be 'chromium' (without -browser)
 if ! command -v chromium-browser >/dev/null 2>&1; then
   apt-get install -y chromium || true
+fi
+
+# Allow non-root users to start X (Xorg wrapper)
+if [[ -f /etc/Xwrapper.config ]]; then
+  sed -i -E 's/^allowed_users=.*/allowed_users=anybody/' /etc/Xwrapper.config || true
+else
+  echo -e "allowed_users=anybody\nneeds_root_rights=auto" >/etc/Xwrapper.config
 fi
 
 # Install Node.js 18.x via NodeSource (includes npm)
@@ -67,30 +75,16 @@ else
   systemctl enable --now vncserver-x11-serviced || true
 fi
 
-echo "[4/5] Configuring desktop autologin for user ${KIOSK_USER}"
-# Ensure LightDM is present and enabled
-apt-get install -y lightdm >/dev/null 2>&1 || true
-systemctl enable lightdm || true
-systemctl set-default graphical.target || true
-
-# Determine desktop session for autologin
-SES=""
-if [ -f /usr/share/wayland-sessions/wayfire.desktop ]; then
-  SES="wayfire"
-elif [ -f /usr/share/xsessions/LXDE-pi.desktop ]; then
-  SES="LXDE-pi"
-elif [ -f /usr/share/xsessions/LXDE.desktop ]; then
-  SES="LXDE"
-fi
-
-# Configure autologin for kiosk user
-mkdir -p /etc/lightdm/lightdm.conf.d
-{
-  echo "[Seat:*]"
-  echo "autologin-user=${KIOSK_USER}"
-  echo "autologin-user-timeout=0"
-  [ -n "$SES" ] && echo "autologin-session=${SES}"
-} >/etc/lightdm/lightdm.conf.d/12-punters-autologin.conf
+echo "[4/5] Configuring console autologin (TTY1) for user ${KIOSK_USER}"
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+cat >/etc/systemd/system/getty@tty1.service.d/override.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin ${KIOSK_USER} --noclear %I \$TERM
+EOF
+systemctl daemon-reload
+systemctl enable getty@tty1 || true
+systemctl set-default multi-user.target || true
 
 echo "[5/5] Preparing /opt/punters and permissions"
 mkdir -p /opt/punters
