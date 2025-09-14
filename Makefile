@@ -53,7 +53,7 @@ pi-launch: ## Raspberry Pi: install to /opt and autostart server + fullscreen br
 	sudo bash scripts/rpi-enable-kiosk.sh server
 
 pi-launch-client: ## Raspberry Pi: autostart fullscreen browser to URL at boot (no local server); pass URL=...
-	@if [ -z "$(URL)" ]; then echo "Set URL, e.g. make pi-launch-client URL=http://server:3000"; exit 1; fi
+	@if [ -z "$(URL)" ]; then echo "Set URL, e.g. make pi-launch-client URL=http://server.local"; exit 1; fi
 	@echo "Enabling kiosk autostart (client mode) -> $(URL) ..." && \
 	sudo bash scripts/rpi-enable-kiosk.sh client "$(URL)"
 

@@ -175,6 +175,8 @@ launch_browser() {
     --check-for-update-interval=31536000
     --no-first-run
     --password-store=basic
+    --user-data-dir="$HOME/.config/chromium-kiosk"
+    --disk-cache-dir="/dev/shm/chromium-cache"
     --overscroll-history-navigation=0
   )
   # If running under Wayland, enable Ozone/Wayland. Otherwise stick to X11 defaults.
@@ -229,6 +231,10 @@ case "$MODE" in
     if [[ -z "${CLIENT_URL}" ]]; then
       echo "CLIENT_URL not set in $CONFIG_FILE for client mode." >&2
       exit 1
+    fi
+    # Normalize: ensure scheme present
+    if [[ ! "$CLIENT_URL" =~ ^https?:// ]]; then
+      CLIENT_URL="http://$CLIENT_URL"
     fi
     # Wait for network DNS (optional, best-effort)
     if command -v raspi-config >/dev/null 2>&1; then

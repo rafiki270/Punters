@@ -51,6 +51,13 @@ if [[ "$MODE" == "client" && -z "$CLIENT_URL" ]]; then
   usage; exit 1
 fi
 
+# Normalize client URL to include scheme if missing
+if [[ "$MODE" == "client" && -n "$CLIENT_URL" ]]; then
+  if [[ ! "$CLIENT_URL" =~ ^https?:// ]]; then
+    CLIENT_URL="http://$CLIENT_URL"
+  fi
+fi
+
 echo "[1/4] Installing repo into ${INSTALL_DIR}"
 mkdir -p "$INSTALL_DIR"
 # rsync if available; fallback to tar copy
@@ -88,8 +95,13 @@ fi
 # Allow non-root users to start X (Xorg wrapper)
 if [[ -f /etc/Xwrapper.config ]]; then
   sed -i -E 's/^allowed_users=.*/allowed_users=anybody/' /etc/Xwrapper.config || true
+  if grep -q '^needs_root_rights=' /etc/Xwrapper.config; then
+    sed -i -E 's/^needs_root_rights=.*/needs_root_rights=yes/' /etc/Xwrapper.config || true
+  else
+    printf "\nneeds_root_rights=yes\n" >> /etc/Xwrapper.config
+  fi
 else
-  echo -e "allowed_users=anybody\nneeds_root_rights=auto" >/etc/Xwrapper.config
+  echo -e "allowed_users=anybody\nneeds_root_rights=yes" >/etc/Xwrapper.config
 fi
 
 echo "Configuring TTY1 autologin for $TARGET_USER (console kiosk)"
@@ -126,8 +138,8 @@ if [[ -z "$DISPLAY" && "$(tty)" == "/dev/tty1" ]]; then
     LOG_FILE="$LOG_DIR/startx.log"
   fi
   while true; do
-    echo "[punters] launching startx at $(date)" >> "$LOG_FILE"
-    startx -- -keeptty -nocursor vt1 >> "$LOG_FILE" 2>&1
+    echo "[punters] launching X at $(date)" >> "$LOG_FILE"
+    xinit "$HOME/.xinitrc" -- :0 -nocursor -nolisten tcp vt1 >> "$LOG_FILE" 2>&1
     rc=$?
     echo "[punters] X exited rc=$rc at $(date). Restarting in 5s..." >> "$LOG_FILE"
     sleep 5
@@ -147,6 +159,14 @@ exec $INSTALL_DIR/scripts/rpi-kiosk-launch.sh
 XRC
   chmod +x "$USER_HOME/.xinitrc"
   chown "$TARGET_USER:$TARGET_USER" "$USER_HOME/.xinitrc"
+
+  # Ensure X starts with correct server options (rootless-safe)
+  cat >"$USER_HOME/.xserverrc" <<'XSERV'
+#!/bin/sh
+exec /usr/lib/xorg/Xorg -nolisten tcp "$@"
+XSERV
+  chmod +x "$USER_HOME/.xserverrc"
+  chown "$TARGET_USER:$TARGET_USER" "$USER_HOME/.xserverrc"
 fi
 
 # Disable any desktop display manager to avoid loading full OS

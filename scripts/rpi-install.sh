@@ -42,11 +42,15 @@ read_server_inputs() {
 
 read_client_inputs() {
   while true; do
-    read -rp "Remote server URL (e.g., http://servername.local:3000): " CLIENT_URL || true
+    read -rp "Remote server address (e.g., server.local or http://server): " CLIENT_URL || true
     if [[ -n "${CLIENT_URL}" ]]; then
+      # Normalize: prepend http:// if no scheme provided
+      if [[ ! "$CLIENT_URL" =~ ^https?:// ]]; then
+        CLIENT_URL="http://$CLIENT_URL"
+      fi
       break
     fi
-    echo "URL cannot be empty."
+    echo "Address cannot be empty."
   done
 }
 
