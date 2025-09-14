@@ -108,13 +108,23 @@ USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 if [[ -n "$USER_HOME" ]]; then
   mkdir -p "$USER_HOME"
   # Start X on login at tty1
+  mkdir -p "$USER_HOME/.local/share/punters" 2>/dev/null || true
   cat >"$USER_HOME/.bash_profile" <<'BASHRC'
 #!/usr/bin/env bash
+# Auto-start X on TTY1 and keep retrying with logs to avoid login flicker.
 if [[ -z "$DISPLAY" && "$(tty)" == "/dev/tty1" ]]; then
-  # Ensure XDG_RUNTIME_DIR is set for the user
   export XDG_RUNTIME_DIR="/run/user/$(id -u)"
   mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true
-  exec startx -- -nocursor
+  LOG_DIR="$HOME/.local/share/punters"
+  LOG_FILE="$LOG_DIR/startx.log"
+  mkdir -p "$LOG_DIR" 2>/dev/null || true
+  while true; do
+    echo "[punters] launching startx at $(date)" | tee -a "$LOG_FILE"
+    startx -- -keeptty -nocursor vt1 >> "$LOG_FILE" 2>&1
+    rc=$?
+    echo "[punters] X exited rc=$rc at $(date). Restarting in 5s..." | tee -a "$LOG_FILE"
+    sleep 5
+  done
 fi
 BASHRC
   chmod 644 "$USER_HOME/.bash_profile"
@@ -123,6 +133,9 @@ BASHRC
   # Minimal X init to launch our kiosk launcher
   cat >"$USER_HOME/.xinitrc" <<XRC
 #!/bin/sh
+# Minimal X session to launch kiosk. If it dies, .bash_profile restarts X.
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-}
 exec $INSTALL_DIR/scripts/rpi-kiosk-launch.sh
 XRC
   chmod +x "$USER_HOME/.xinitrc"

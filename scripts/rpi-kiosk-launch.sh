@@ -113,7 +113,19 @@ launch_browser() {
   if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
     flags+=(--enable-features=UseOzonePlatform --ozone-platform=wayland)
   fi
-  exec "$BROWSER_BIN" "${flags[@]}" "$url"
+  # Allow adding extra flags via env if needed
+  if [[ -n "${BROWSER_FLAGS:-}" ]]; then
+    # shellcheck disable=SC2206
+    extra=( ${BROWSER_FLAGS} )
+    flags+=("${extra[@]}")
+  fi
+  # Keep restarting the browser if it exits, to avoid dropping X.
+  while true; do
+    "$BROWSER_BIN" "${flags[@]}" "$url"
+    rc=$?
+    echo "Chromium exited rc=$rc; relaunching in 3s..."
+    sleep 3
+  done
 }
 
 case "$MODE" in
