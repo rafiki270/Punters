@@ -259,17 +259,7 @@ else
   curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-disable-sleep.sh" | bash -s --
 fi
 
-echo "\n== Setting desktop wallpaper for autologin user =="
-if [[ "${SKIP_WALLPAPER:-}" = "1" ]]; then
-  echo "Skipping wallpaper configuration (SKIP_WALLPAPER=1)."
-else
-  if [[ -x "$INSTALL_DIR/scripts/rpi-set-wallpaper.sh" ]]; then
-    bash "$INSTALL_DIR/scripts/rpi-set-wallpaper.sh" "$INSTALL_DIR/web/public/bcg/weathered wood.jpg"
-  else
-    curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-wallpaper.sh" | \
-      bash -s -- "$INSTALL_DIR/web/public/bcg/weathered wood.jpg"
-  fi
-fi
+# Wallpaper configuration removed: kiosk runs without a desktop session
 
 echo "\n== Enabling autostart service =="
 enable_kiosk_service

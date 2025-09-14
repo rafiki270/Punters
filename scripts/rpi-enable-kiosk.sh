@@ -60,11 +60,17 @@ fi
 
 echo "[1/4] Installing repo into ${INSTALL_DIR}"
 mkdir -p "$INSTALL_DIR"
-# rsync if available; fallback to tar copy
-if command -v rsync >/dev/null 2>&1; then
-  rsync -a --delete --exclude .git ./ "$INSTALL_DIR/"
+# Determine source directory as the repo root (script dir/..), not PWD
+SRC_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ "$SRC_DIR" != "$INSTALL_DIR" ]]; then
+  echo "Copying from $SRC_DIR to $INSTALL_DIR"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete --exclude .git "$SRC_DIR/" "$INSTALL_DIR/"
+  else
+    tar -C "$SRC_DIR" -cf - --exclude .git . | tar -C "$INSTALL_DIR" -xf -
+  fi
 else
-  tar -C . -cf - --exclude .git . | tar -C "$INSTALL_DIR" -xf -
+  echo "Source equals install dir; skip copy"
 fi
 chown -R "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR"
 # Normalize permissions and ensure scripts are executable
