@@ -159,6 +159,14 @@ clone_repo() {
     echo "Cloning repo into $INSTALL_DIR ..."
     mkdir -p "$INSTALL_DIR"
     chown "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR" || true
+    # If directory exists and is not empty, back it up to avoid clone failure
+    if [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
+      backup="${INSTALL_DIR}.bak.$(date +%s)"
+      echo "INSTALL_DIR not empty; moving to $backup"
+      mv "$INSTALL_DIR" "$backup"
+      mkdir -p "$INSTALL_DIR"
+      chown "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR" || true
+    fi
     sudo -u "$KIOSK_USER" git clone "$REPO_URL" "$INSTALL_DIR"
   fi
   chown -R "$KIOSK_USER:$KIOSK_USER" "$INSTALL_DIR"
@@ -206,13 +214,18 @@ fi
 echo "\n== Fetching application =="
 clone_repo
 
-echo "\n== Forcing desktop autologin (kiosk) =="
-if [[ -x "$INSTALL_DIR/scripts/rpi-force-autologin.sh" ]]; then
-  KIOSK_USER="$KIOSK_USER" KIOSK_PASSWORD="$KIOSK_PASSWORD" bash "$INSTALL_DIR/scripts/rpi-force-autologin.sh"
+echo "\n== Desktop autologin (optional LightDM) =="
+if [[ "${USE_LIGHTDM:-}" = "1" ]]; then
+  echo "Enabling LightDM autologin for $KIOSK_USER (USE_LIGHTDM=1)"
+  if [[ -x "$INSTALL_DIR/scripts/rpi-force-autologin.sh" ]]; then
+    KIOSK_USER="$KIOSK_USER" KIOSK_PASSWORD="$KIOSK_PASSWORD" bash "$INSTALL_DIR/scripts/rpi-force-autologin.sh"
+  else
+    echo "force-autologin script not found in repo; fetching from GitHub..."
+    curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-force-autologin.sh" | \
+      KIOSK_USER="$KIOSK_USER" KIOSK_PASSWORD="$KIOSK_PASSWORD" bash
+  fi
 else
-  echo "force-autologin script not found in repo; fetching from GitHub..."
-  curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-force-autologin.sh" | \
-    KIOSK_USER="$KIOSK_USER" KIOSK_PASSWORD="$KIOSK_PASSWORD" bash
+  echo "Skipping LightDM autologin (console+xinit kiosk will be used). Set USE_LIGHTDM=1 to enable."
 fi
 
 echo "\n== Setting boot splash (if image present) =="
