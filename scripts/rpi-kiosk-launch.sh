@@ -150,6 +150,16 @@ reset_display() {
   if [[ -z "$out" ]]; then
     return
   fi
+  # Proactively turn off any non-primary connected outputs to avoid extended desktop half-screen
+  if command -v xrandr >/dev/null 2>&1; then
+    local other
+    # shellcheck disable=SC2016
+    while read -r other; do
+      [[ -n "$other" && "$other" != "$out" ]] && xrandr --output "$other" --off >/dev/null 2>&1 || true
+    done < <(xrandr --query 2>/dev/null | awk -v p="$out" '/ connected/{print $1}' | grep -v "^$out$")
+  fi
+  # Ensure our output is marked primary
+  xrandr --output "$out" --primary >/dev/null 2>&1 || true
   # Find the preferred mode (line with a *) after the output header
   pref=$(xrandr --query 2>/dev/null | awk -v o="$out" 'f && /\*/{print $1; exit} $1==o{f=1}')
   if [[ -n "$pref" ]]; then
@@ -176,6 +186,7 @@ reset_display() {
     # Ensure screen framebuffer matches output mode and output is at 0,0
     xrandr --fb "$target_mode" >/dev/null 2>&1 || true
     xrandr --output "$out" --pos 0x0 >/dev/null 2>&1 || true
+    xrandr --dpi 96 >/dev/null 2>&1 || true
     log "xrandr: set framebuffer to $target_mode and positioned $out at 0,0"
     # If 4K or wider, render at 2x scale for crisp UI
     local tw=${target_mode%x*}
