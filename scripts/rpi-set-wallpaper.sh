@@ -7,6 +7,11 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   exit 1
 fi
 
+if [[ "${SKIP_WALLPAPER:-}" = "1" ]]; then
+  echo "SKIP_WALLPAPER=1 set — skipping wallpaper setup."
+  exit 0
+fi
+
 IMG_PATH=${1:-/opt/punters/web/public/bcg/weathered wood.jpg}
 KIOSK_USER=${KIOSK_USER:-kiosk}
 

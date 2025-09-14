@@ -59,10 +59,10 @@ read_display_prefs() {
   echo
   echo "Display setup:"
   while true; do
-    read -rp "Is your TV/monitor 4K (UHD)? Enable pixel doubling for crisp 1080p? [y/N]: " ans || true
+    read -rp "Is your TV/monitor 4K (UHD)? Enable pixel doubling for crisp 1080p? [Y/n]: " ans || true
     case "${ans:-}" in
-      y|Y) PIXEL_DOUBLE=1; break;;
-      n|N|"") PIXEL_DOUBLE=0; break;;
+      ""|y|Y) PIXEL_DOUBLE=1; break;;
+      n|N) PIXEL_DOUBLE=0; break;;
       *) echo "Please answer y or n.";;
     esac
   done
@@ -213,6 +213,10 @@ fi
 echo "\n== Setting boot splash (if image present) =="
 if [[ "${SKIP_SPLASH:-}" = "1" ]]; then
   echo "Skipping boot splash configuration (SKIP_SPLASH=1)."
+  # If an older splash is installed, proactively disable it for faster boots
+  if [[ -x "$INSTALL_DIR/scripts/rpi-remove-splash.sh" ]]; then
+    bash "$INSTALL_DIR/scripts/rpi-remove-splash.sh"
+  fi
 else
   if [[ -x "$INSTALL_DIR/scripts/rpi-set-splash.sh" ]]; then
     bash "$INSTALL_DIR/scripts/rpi-set-splash.sh" \
@@ -238,11 +242,15 @@ else
 fi
 
 echo "\n== Setting desktop wallpaper for autologin user =="
-if [[ -x "$INSTALL_DIR/scripts/rpi-set-wallpaper.sh" ]]; then
-  bash "$INSTALL_DIR/scripts/rpi-set-wallpaper.sh" "$INSTALL_DIR/web/public/bcg/weathered wood.jpg"
+if [[ "${SKIP_WALLPAPER:-}" = "1" ]]; then
+  echo "Skipping wallpaper configuration (SKIP_WALLPAPER=1)."
 else
-  curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-wallpaper.sh" | \
-    bash -s -- "$INSTALL_DIR/web/public/bcg/weathered wood.jpg"
+  if [[ -x "$INSTALL_DIR/scripts/rpi-set-wallpaper.sh" ]]; then
+    bash "$INSTALL_DIR/scripts/rpi-set-wallpaper.sh" "$INSTALL_DIR/web/public/bcg/weathered wood.jpg"
+  else
+    curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-wallpaper.sh" | \
+      bash -s -- "$INSTALL_DIR/web/public/bcg/weathered wood.jpg"
+  fi
 fi
 
 echo "\n== Enabling autostart service =="
