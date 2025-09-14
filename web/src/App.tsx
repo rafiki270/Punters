@@ -1061,6 +1061,8 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
   // Per-group local override toggles
   const [beerOverride, setBeerOverride] = useState<boolean>(()=>{ try { return localStorage.getItem('beerLocalOverride')==='true' } catch { return false } })
   const [drinksOverride, setDrinksOverride] = useState<boolean>(()=>{ try { return localStorage.getItem('drinksLocalOverride')==='true' } catch { return false } })
+  // Track recent user edits to drinks controls to avoid clobber during saves
+  const drinksEditTsRef = useRef<number>(0)
   useEffect(()=>{ if (settings) { setTheme(settings.themeMode); setLogoPreview(settings.logoAssetId?`/api/assets/${settings.logoAssetId}/content`:null); setBgPreview(settings.backgroundAssetId?`/api/assets/${settings.backgroundAssetId}/content`:null); setLocalCellScale((settings as any).cellScale ?? 50); setLocalColumnGap((settings as any).columnGap ?? 40); setLocalBeerColumns((settings as any).beerColumns ?? 1); setLocalItemsPerPage((settings as any).itemsPerPage ?? 10); setLocalLogoPosition(((settings as any).logoPosition as any) ?? 'top-center'); setLocalLogoScale((settings as any).logoScale ?? 100); setLocalBgPosition(((settings as any).bgPosition as any) ?? 'center'); setLocalBgScale((settings as any).bgScale ?? 100); setBgPresetSel(((settings as any)?.backgroundPreset as string) ?? 'custom') } },[settings])
   // When override is enabled, prefer local-saved values for beer fields
   useEffect(() => {
@@ -1077,6 +1079,8 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
   // Reflect server drinks values into UI controls when override is OFF and not actively saving
   useEffect(()=>{
     if (!settings || drinksOverride || savingDrinksRef.current) return
+    // Avoid clobbering user during recent interactions (1.2s window)
+    if (Date.now() - drinksEditTsRef.current < 1200) return
     const s: any = settings
     if (typeof s.drinksCellScale === 'number' && s.drinksCellScale !== localDrinksCellScale) setLocalDrinksCellScale(s.drinksCellScale)
     if (typeof s.drinksItemsPerCol === 'number' && s.drinksItemsPerCol>0 && s.drinksItemsPerCol !== localDrinksItemsPerCol) setLocalDrinksItemsPerCol(s.drinksItemsPerCol)
@@ -1247,17 +1251,17 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
           <div className="space-y-3">
             <div>
               <label className="block text-sm mb-1">Drinks Cell Scale {drinksOverride ? '(local override)' : '(default)'}</label>
-              <input type="range" min={0} max={100} value={localDrinksCellScale} onChange={e=>setLocalDrinksCellScale(Number(e.target.value))} className="w-60" />
+              <input type="range" min={0} max={100} value={localDrinksCellScale} onChange={e=>{ drinksEditTsRef.current = Date.now(); setLocalDrinksCellScale(Number(e.target.value)) }} className="w-60" />
               <div className="text-xs opacity-70 mt-1">{localDrinksCellScale}% — controls drinks typography scale.</div>
             </div>
             <div>
               <label className="block text-sm mb-1">Drinks Items per Column</label>
-              <input type="range" min={10} max={60} value={localDrinksItemsPerCol} onChange={e=>setLocalDrinksItemsPerCol(Math.max(10, Math.min(60, Number(e.target.value)||10)))} className="w-60" />
+              <input type="range" min={10} max={60} value={localDrinksItemsPerCol} onChange={e=>{ drinksEditTsRef.current = Date.now(); setLocalDrinksItemsPerCol(Math.max(10, Math.min(60, Number(e.target.value)||10)))} } className="w-60" />
               <div className="text-xs opacity-70 mt-1">{localDrinksItemsPerCol} items</div>
             </div>
             <div>
               <label className="block text-sm mb-1">Drinks indentation (% of cell)</label>
-              <input type="range" min={0} max={30} value={Number.isFinite(localDrinksIndentPct as any) ? localDrinksIndentPct : 10} onChange={e=>{ const n=Math.max(0, Math.min(30, Number(e.target.value)||0)); setDrinksIndent(n); try{ localStorage.setItem('drinksIndentPct', String(n)) } catch {} }} className="w-60" />
+              <input type="range" min={0} max={30} value={Number.isFinite(localDrinksIndentPct as any) ? localDrinksIndentPct : 10} onChange={e=>{ drinksEditTsRef.current = Date.now(); const n=Math.max(0, Math.min(30, Number(e.target.value)||0)); setDrinksIndent(n); try{ localStorage.setItem('drinksIndentPct', String(n)) } catch {} }} className="w-60" />
               <div className="text-xs opacity-70 mt-1">{localDrinksIndentPct}%</div>
             </div>
           </div>
