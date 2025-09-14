@@ -7,6 +7,11 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   exit 1
 fi
 
+if [[ "${SKIP_SPLASH:-}" = "1" ]]; then
+  echo "SKIP_SPLASH=1 set — skipping splash configuration."
+  exit 0
+fi
+
 IMG=${1:-/opt/punters/resources/info.png}
 THEME_DIR=/usr/share/plymouth/themes
 THEME_NAME=punters
@@ -17,10 +22,23 @@ if [[ ! -f "$IMG" ]]; then
   exit 0
 fi
 
-echo "Installing plymouth packages (if missing)…"
+changed=0
+
+# Fast path: if theme already active and image unchanged, skip everything.
+if [[ -f /etc/plymouth/plymouthd.conf ]] && \
+   grep -q '^Theme=\s*punters\b' /etc/plymouth/plymouthd.conf 2>/dev/null && \
+   [[ -f "$TARGET_DIR/splash.png" ]] && \
+   cmp -s "$IMG" "$TARGET_DIR/splash.png"; then
+  echo "Plymouth theme already set to 'punters' with identical image — skipping."
+  exit 0
+fi
+
+echo "Ensuring plymouth packages (if missing)…"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -y >/dev/null 2>&1 || true
-apt-get install -y plymouth plymouth-themes >/dev/null 2>&1 || true
+if ! dpkg -s plymouth >/dev/null 2>&1 || ! dpkg -s plymouth-themes >/dev/null 2>&1; then
+  apt-get update -y >/dev/null 2>&1 || true
+  apt-get install -y plymouth plymouth-themes >/dev/null 2>&1 || true
+fi
 
 mkdir -p "$TARGET_DIR"
 
@@ -56,8 +74,16 @@ sprite.SetY((sh - h) / 2);
 SCRIPT
 fi
 
-# Replace theme image with provided one
-install -m 644 "$IMG" "$TARGET_DIR/splash.png"
+old_sum=""
+new_sum=""
+if [[ -f "$TARGET_DIR/splash.png" ]]; then
+  old_sum=$(sha256sum "$TARGET_DIR/splash.png" 2>/dev/null | awk '{print $1}')
+fi
+new_sum=$(sha256sum "$IMG" 2>/dev/null | awk '{print $1}')
+if [[ "$old_sum" != "$new_sum" ]]; then
+  install -m 644 "$IMG" "$TARGET_DIR/splash.png"
+  changed=1
+fi
 
 # Rename theme metadata to punters
 if [[ -f "$TARGET_DIR/pix.plymouth" ]]; then
@@ -65,12 +91,26 @@ if [[ -f "$TARGET_DIR/pix.plymouth" ]]; then
     "$TARGET_DIR/pix.plymouth" >"$TARGET_DIR/$THEME_NAME.plymouth" || true
 fi
 
-echo "Setting default plymouth theme to $THEME_NAME and rebuilding initramfs…"
-if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-  plymouth-set-default-theme -R "$THEME_NAME" >/dev/null 2>&1 || plymouth-set-default-theme "$THEME_NAME" || true
+current_theme=""
+if [[ -f /etc/plymouth/plymouthd.conf ]]; then
+  current_theme=$(awk -F= '/^Theme/{gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2}' /etc/plymouth/plymouthd.conf 2>/dev/null || true)
 fi
-if command -v update-initramfs >/dev/null 2>&1; then
-  update-initramfs -u >/dev/null 2>&1 || true
+
+if [[ "$current_theme" != "$THEME_NAME" ]]; then
+  echo "Setting default plymouth theme to $THEME_NAME…"
+  if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+    plymouth-set-default-theme "$THEME_NAME" >/dev/null 2>&1 || true
+  fi
+  changed=1
+fi
+
+if [[ "$changed" = "1" ]]; then
+  echo "Theme/image changed — rebuilding initramfs…"
+  if command -v update-initramfs >/dev/null 2>&1; then
+    update-initramfs -u >/dev/null 2>&1 || true
+  fi
+else
+  echo "No changes detected — skipping initramfs rebuild."
 fi
 
 # Ensure splash is enabled at boot (Bookworm uses /boot/firmware)
@@ -98,4 +138,3 @@ for CONFIG in /boot/firmware/config.txt /boot/config.txt; do
 done
 
 echo "Custom splash configured. It takes effect after a reboot."
-

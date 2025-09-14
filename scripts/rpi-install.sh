@@ -195,12 +195,16 @@ else
 fi
 
 echo "\n== Setting boot splash (if image present) =="
-if [[ -x "$INSTALL_DIR/scripts/rpi-set-splash.sh" ]]; then
-  bash "$INSTALL_DIR/scripts/rpi-set-splash.sh" \
-    "$INSTALL_DIR/resources/info.png"
+if [[ "${SKIP_SPLASH:-}" = "1" ]]; then
+  echo "Skipping boot splash configuration (SKIP_SPLASH=1)."
 else
-  curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-splash.sh" | \
-    bash -s -- "$INSTALL_DIR/resources/info.png"
+  if [[ -x "$INSTALL_DIR/scripts/rpi-set-splash.sh" ]]; then
+    bash "$INSTALL_DIR/scripts/rpi-set-splash.sh" \
+      "$INSTALL_DIR/resources/info.png"
+  else
+    curl -fsSL "https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-set-splash.sh" | \
+      bash -s -- "$INSTALL_DIR/resources/info.png"
+  fi
 fi
 
 echo "\n== Forcing 1080p resolution (best-effort) =="
