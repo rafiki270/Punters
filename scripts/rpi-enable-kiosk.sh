@@ -74,36 +74,39 @@ CLIENT_URL=${CLIENT_URL}
 INSTALL_DIR=${INSTALL_DIR}
 CFG
 
-echo "[3/4] Installing systemd service: ${UNIT_FILE}"
-cat >"$UNIT_FILE" <<UNIT
-[Unit]
-Description=Punters Kiosk (Chromium fullscreen + optional local server)
-After=systemd-user-sessions.service network-online.target graphical.target
-Wants=network-online.target
+echo "[3/4] Installing LightDM X session for Chromium-only kiosk"
+# Ensure LightDM is present and enabled
+apt-get update -y >/dev/null 2>&1 || true
+apt-get install -y lightdm >/dev/null 2>&1 || true
+systemctl enable lightdm || true
+systemctl set-default graphical.target || true
 
-[Service]
-Type=simple
-User=$TARGET_USER
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/$TARGET_USER/.Xauthority
-Environment=XDG_RUNTIME_DIR=/run/user/$KIOSK_UID
-Environment=CONFIG_FILE=/etc/default/punters-kiosk
-ExecStart=/usr/bin/env bash -lc '$INSTALL_DIR/scripts/rpi-kiosk-launch.sh'
-Restart=always
-RestartSec=3
-WorkingDirectory=$INSTALL_DIR
-# Allow binding to privileged port 80 without root
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-NoNewPrivileges=true
-ExecStartPre=/usr/bin/bash -lc 'for i in {1..60}; do [ -S /tmp/.X11-unix/X0 ] && exit 0; sleep 1; done; exit 0'
+# Create X session that runs only our launcher script
+SESSION_DESKTOP=/usr/share/xsessions/punters-kiosk.desktop
+cat >"$SESSION_DESKTOP" <<DESK
+[Desktop Entry]
+Name=Punters Kiosk
+Comment=Chromium fullscreen kiosk session
+Exec=/usr/bin/env bash -lc '$INSTALL_DIR/scripts/rpi-kiosk-launch.sh'
+Type=Application
+DesktopNames=punters-kiosk
+X-LightDM-DesktopName=punters-kiosk
+DESK
 
-[Install]
-WantedBy=graphical.target
-UNIT
+# Configure LightDM to autologin into our kiosk session
+mkdir -p /etc/lightdm/lightdm.conf.d
+cat >/etc/lightdm/lightdm.conf.d/99-punters-kiosk.conf <<LDM
+[Seat:*]
+autologin-user=$TARGET_USER
+autologin-user-timeout=0
+autologin-session=punters-kiosk
+LDM
 
-echo "[4/4] Enabling service and reloading daemon"
-systemctl daemon-reload
-systemctl enable --now punters-kiosk.service
+# If an old systemd unit exists, disable it to avoid duplication
+if systemctl is-enabled --quiet punters-kiosk.service 2>/dev/null; then
+  systemctl disable --now punters-kiosk.service || true
+fi
+
+echo "[4/4] Kiosk session installed. Reboot to start kiosk."
 
 echo "Done. Reboot to test kiosk autostart: sudo reboot"

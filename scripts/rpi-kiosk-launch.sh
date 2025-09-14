@@ -99,17 +99,21 @@ start_server() {
 launch_browser() {
   local url=$1
   echo "Launching Chromium -> $url"
-  exec "$BROWSER_BIN" \
-    --kiosk \
-    --incognito \
-    --noerrdialogs \
-    --disable-infobars \
-    --disable-session-crashed-bubble \
-    --check-for-update-interval=31536000 \
-    --enable-features=UseOzonePlatform \
-    --ozone-platform=wayland \
-    --overscroll-history-navigation=0 \
-    "$url"
+  # Choose flags based on display stack
+  local flags=(
+    --kiosk
+    --incognito
+    --noerrdialogs
+    --disable-infobars
+    --disable-session-crashed-bubble
+    --check-for-update-interval=31536000
+    --overscroll-history-navigation=0
+  )
+  # If running under Wayland, enable Ozone/Wayland. Otherwise stick to X11 defaults.
+  if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+    flags+=(--enable-features=UseOzonePlatform --ozone-platform=wayland)
+  fi
+  exec "$BROWSER_BIN" "${flags[@]}" "$url"
 }
 
 case "$MODE" in
