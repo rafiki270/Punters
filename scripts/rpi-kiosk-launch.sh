@@ -246,7 +246,6 @@ launch_browser() {
   # Choose flags based on display stack
   local flags=(
     --kiosk
-    --incognito
     --noerrdialogs
     --disable-infobars
     --disable-session-crashed-bubble
@@ -255,6 +254,7 @@ launch_browser() {
     --password-store=basic
     --user-data-dir="$HOME/.config/chromium-kiosk"
     --disk-cache-dir="/dev/shm/chromium-cache"
+    --restore-last-session
     --overscroll-history-navigation=0
   )
   # Derive current screen size and force Chromium window to fill it
