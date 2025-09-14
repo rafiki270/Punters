@@ -159,12 +159,27 @@ reset_display() {
   # Clear any previous transforms/panning that could shrink to left portion
   xrandr --output "$out" --rotate normal --reflect normal --scale 1x1 --transform none --panning 0x0+0+0 >/dev/null 2>&1 || true
   log "xrandr: cleared transforms on $out"
-  # Set to preferred native mode if known; otherwise keep current
-  if [[ -n "$native_w" && -n "$native_h" ]]; then
-    xrandr --output "$out" --mode "${native_w}x${native_h}" >/dev/null 2>&1 || true
-    log "xrandr: set $out preferred mode ${native_w}x${native_h}"
+  # Allow forcing a specific mode (e.g., FORCE_MODE=1920x1080)
+  local target_mode="${FORCE_MODE:-}"
+  if [[ -z "$target_mode" && -n "$native_w" && -n "$native_h" ]]; then
+    target_mode="${native_w}x${native_h}"
+  fi
+  if [[ -n "$target_mode" ]]; then
+    # Optionally honor FORCE_RATE (e.g., 60)
+    if [[ -n "${FORCE_RATE:-}" ]]; then
+      xrandr --output "$out" --mode "$target_mode" --rate "$FORCE_RATE" >/dev/null 2>&1 || true
+      log "xrandr: set $out mode $target_mode@$FORCE_RATE"
+    else
+      xrandr --output "$out" --mode "$target_mode" >/dev/null 2>&1 || true
+      log "xrandr: set $out mode $target_mode"
+    fi
+    # Ensure screen framebuffer matches output mode and output is at 0,0
+    xrandr --fb "$target_mode" >/dev/null 2>&1 || true
+    xrandr --output "$out" --pos 0x0 >/dev/null 2>&1 || true
+    log "xrandr: set framebuffer to $target_mode and positioned $out at 0,0"
     # If 4K or wider, render at 2x scale for crisp UI
-    if [[ "$native_w" -ge 3000 ]]; then
+    local tw=${target_mode%x*}
+    if [[ "$tw" -ge 3000 ]]; then
       export BROWSER_FLAGS="${BROWSER_FLAGS:-} --high-dpi-support=1 --force-device-scale-factor=2"
       log "chromium: adding 2x scale flags for 4K"
     fi
