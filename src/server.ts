@@ -11,7 +11,7 @@ import { registerTapRoutes } from './routes/taps';
 import { registerI18nRoutes } from './routes/i18n';
 import { registerMediaRoutes } from './routes/media';
 import { registerDeviceRoutes } from './routes/devices';
-import { registerAuthRoutes } from './auth';
+import { registerAuthRoutes, requireAdmin } from './auth';
 import { registerAdminRoutes } from './routes/admin';
 import { registerDisplayRoutes } from './routes/display';
 import { registerNetworkRoutes } from './routes/network';
@@ -133,11 +133,31 @@ async function buildServer() {
 
   // Socket.IO
   const io = new IOServer(app.server, { cors: { origin: true } });
+  // Track connected display browsers (memory-only)
+  type DisplayClient = { id: string; address?: string|null; screenIndex?: number; screenCount?: number; deviceId?: number|null; connectedAt: number }
+  const displays = new Map<string, DisplayClient>()
   // Global sync state (memory-only)
   let cycleOffset = 0;
   let anchorMs: number | null = null; // if set, cycles derive from (epoch - anchorMs)
   io.on('connection', (socket) => {
     app.log.info({ id: socket.id }, 'socket connected');
+    // Register display clients
+    socket.on('register_display', (p: { screenIndex?: number; screenCount?: number; deviceId?: number|null }) => {
+      const info: DisplayClient = {
+        id: socket.id,
+        address: (socket.handshake as any)?.address || null,
+        screenIndex: typeof p?.screenIndex === 'number' ? p.screenIndex : undefined,
+        screenCount: typeof p?.screenCount === 'number' ? p.screenCount : undefined,
+        deviceId: typeof p?.deviceId === 'number' ? p.deviceId : null,
+        connectedAt: Date.now(),
+      }
+      displays.set(socket.id, info)
+      app.log.info({ id: socket.id, info }, 'display registered')
+    })
+    socket.on('unregister_display', () => {
+      displays.delete(socket.id)
+      app.log.info({ id: socket.id }, 'display unregistered')
+    })
     // Send current sync state to new connections
     socket.emit('sync_state', { cycleOffset, anchorMs });
     // Allow clients (admin UI) to synchronize now or advance page globally
@@ -149,7 +169,10 @@ async function buildServer() {
       cycleOffset += 1;
       io.emit('sync_state', { cycleOffset, anchorMs });
     });
-    socket.on('disconnect', () => app.log.info({ id: socket.id }, 'socket disconnected'));
+    socket.on('disconnect', () => {
+      displays.delete(socket.id)
+      app.log.info({ id: socket.id }, 'socket disconnected')
+    });
   });
 
   // Bridge internal change events to clients
@@ -162,6 +185,32 @@ async function buildServer() {
     const epoch = Date.now();
     io.emit('tick', { epoch });
   }, 1000);
+
+  // API: list connected display browsers
+  app.get('/api/clients/displays', async () => {
+    const list = Array.from(displays.values())
+      .sort((a,b) => (a.connectedAt - b.connectedAt))
+      .map((x, i) => ({
+        id: x.id,
+        n: i+1,
+        address: x.address || undefined,
+        screenIndex: x.screenIndex,
+        screenCount: x.screenCount,
+        deviceId: x.deviceId ?? undefined,
+      }))
+    return list
+  })
+
+  // API: ask a specific display to show its identifier
+  app.post('/api/clients/displays/:id/identify', { preHandler: requireAdmin }, async (req, reply) => {
+    const id = String((req.params as any).id)
+    const body = (req as any).body || {}
+    const n = Number(body.n)
+    const secs = Number(body.secs) || 5
+    if (!io.sockets.sockets.get(id)) return reply.code(404).send({ error: 'Display not connected' })
+    io.to(id).emit('identify', { n: Number.isFinite(n) ? n : undefined, secs })
+    return { ok: true }
+  })
 
   return app;
 }

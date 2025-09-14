@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import BeerCell from './components/BeerCell'
+import ArrangementsPanel from './admin/panels/ArrangementsPanel'
 import { io, Socket } from 'socket.io-client'
 
 type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'drinks'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean; drinksCellScale?: number; drinksItemsPerCol?: number; drinksIndentPct?: number }
@@ -134,6 +135,9 @@ function Display() {
   // state for screen sync panel
   const [showSync, setShowSync] = useState(false)
   useEffect(() => { if (adminOpen) setShowSync(false) }, [adminOpen])
+  // Temporary identify overlay
+  const [identify, setIdentify] = useState<{ n: number; until: number } | null>(null)
+  const identifyTimer = useRef<number | null>(null)
   // Beer columns and items per page are now global defaults (server) with device overrides
   // Style values now inherit from server settings by default; device may override
   // Local client-only fallbacks retained for Items per Page only.
@@ -285,13 +289,27 @@ function Display() {
       if (typeof p.cycleOffset === 'number') setCycleOffset(p.cycleOffset)
       if ('anchorMs' in p) setAnchorMs(p.anchorMs ?? null)
     }
-    const onConnect = () => { /* connected */ }
+    const onIdentify = (p: { n?: number; secs?: number }) => {
+      try {
+        const secs = Number(p?.secs) || 5
+        const n = typeof p?.n === 'number' ? p.n : undefined
+        setIdentify({ n: n ?? 0, until: Date.now() + secs*1000 })
+        if (identifyTimer.current) clearTimeout(identifyTimer.current)
+        identifyTimer.current = window.setTimeout(() => setIdentify(null), secs*1000)
+      } catch {}
+    }
+    const onConnect = () => {
+      try {
+        sock.emit('register_display', { screenIndex: screenIndexParam, screenCount: screenCountParam, deviceId })
+      } catch {}
+    }
     const onConnectError = () => { /* suppress noisy dev errors */ }
     sock.on('connect', onConnect)
     sock.on('connect_error', onConnectError)
     sock.on('changed', onChanged)
     sock.on('tick', onTick)
     sock.on('sync_state', onSyncState)
+    sock.on('identify', onIdentify)
     socketRef.current = sock
     return () => {
       try {
@@ -300,10 +318,9 @@ function Display() {
         sock.off('changed', onChanged)
         sock.off('tick', onTick)
         sock.off('sync_state', onSyncState)
+        sock.off('identify', onIdentify)
         // Only disconnect active sockets to avoid noisy browser errors
-        if (sock.connected) {
-          sock.disconnect()
-        }
+        if (sock.connected) { sock.emit('unregister_display'); sock.disconnect() }
       } catch {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -491,6 +508,14 @@ function Display() {
           className="absolute inset-0 -z-10 bg-no-repeat bg-center"
           style={{ backgroundImage: `url(${bgUrl})`, backgroundSize: `${effBgScale}%`, backgroundPosition: effBgPosition, opacity: Math.max(0, Math.min(1, effBgOpacity/100)) }}
         />
+      )}
+      {/* Identify overlay */}
+      {identify && (Date.now() < identify.until) && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <div className="text-red-600 font-extrabold" style={{ fontSize: '22vh', textShadow: '0 2px 6px rgba(0,0,0,0.5)' }}>
+            {identify.n || 0}
+          </div>
+        </div>
       )}
       {/* Floating controls (auto-hide) */}
       <div className={`fixed top-3 right-3 z-50 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto flex items-center gap-2`}>
@@ -784,6 +809,7 @@ export default function App() {
 }
 
 // ----- Admin Overlay Components -----
+// ArrangementsPanel moved to web/src/admin/panels/ArrangementsPanel.tsx
 function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, servers, remoteBase, onSelectServer, localDisplayMode, setLocalDisplayMode, localShowDrinks, setLocalShowDrinks, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setLocalDrinksIndentPct, setBeerLocalCellScale, setBeerLocalColumns, setBeerOverrideFlag, setDrinksOverrideFlag }: { isOpen: boolean; sizes: Size[]; settings: Settings|null; onClose: () => void; onRefresh: () => void; mode: 'server'|'client'; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; localDisplayMode: 'all'|'beer'|'drinks'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'drinks'|'ads')=>void; localShowDrinks: boolean; setLocalShowDrinks: (v:boolean)=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setLocalDrinksIndentPct: (n:number)=>void; setBeerLocalCellScale: (n:number)=>void; setBeerLocalColumns: (n:number)=>void; setBeerOverrideFlag: (v:boolean)=>void; setDrinksOverrideFlag: (v:boolean)=>void }) {
   const [uiMode, setUiMode] = useState<'server'|'client'>(mode)
   const tabs: Array<{key: string; label: string}> = [
@@ -795,6 +821,7 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
       { key: 'taps', label: 'Taps' },
       { key: 'drinks', label: 'Other drinks' },
       { key: 'media', label: 'Media' },
+      { key: 'arrange', label: 'Arrangements' },
       { key: 'backup', label: 'Backup' },
     ] as any : [])
   ]
@@ -843,6 +870,7 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
         {uiMode==='server' && tab === 'drinks' && <DrinksPanel sizes={sizes} onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'backup' && <BackupPanel />}
+        {uiMode==='server' && tab === 'arrange' && <ArrangementsPanel />}
         {/* Devices tab removed */}
       </div>
     </div>
@@ -905,6 +933,7 @@ function AdminPage() {
       { key: 'taps', label: 'Taps' },
       { key: 'drinks', label: 'Other drinks' },
       { key: 'media', label: 'Media' },
+      { key: 'arrange', label: 'Arrangements' },
       { key: 'backup', label: 'Backup' },
     ] as any : [])
   ]
@@ -926,6 +955,7 @@ function AdminPage() {
       {uiMode==='server' && tab === 'drinks' && <DrinksPanel sizes={sizes} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'backup' && <BackupPanel />}
+      {uiMode==='server' && tab === 'arrange' && <ArrangementsPanel />}
     </div>
   )
 }
