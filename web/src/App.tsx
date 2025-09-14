@@ -1001,7 +1001,7 @@ function AdminPage() {
         </div>
       </div>
       {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={loadAll} localDisplayMode={localDisplayMode} setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }} localShowDrinks={localShowDrinks} setLocalShowDrinks={(v)=>{ setLocalShowDrinks(v); localStorage.setItem('localShowDrinks', String(v)) }} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} servers={servers} remoteBase={remoteBase} onSelectServer={(url)=>{ localStorage.setItem('remoteServer', url); setRemoteBase(url); loadAll() }} onLocalModeChange={(m)=>{ setUiMode(m) }} />}
-      {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={loadAll} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} localDrinksIndentPct={adminDrinksIndentPct} setDrinksIndent={(n)=>{ setAdminDrinksIndentPct(n); localStorage.setItem('drinksIndentPct', String(n)) }} />}
+      {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={loadAll} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} localDrinksIndentPct={adminDrinksIndentPct} setDrinksIndent={(n)=>{ setAdminDrinksIndentPct(n); localStorage.setItem('drinksIndentPct', String(n)) }} showLocalOverrides={false} />}
       {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={loadAll} />}
@@ -1035,7 +1035,7 @@ function ServerPanel({ servers, remoteBase, onSelectServer }: { servers: Discove
   )
 }
 
-function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setDrinksIndent, setBeerLocalCellScale = () => {}, setBeerLocalColumns = () => {}, setBeerOverrideFlag = () => {}, setDrinksOverrideFlag = () => {} }: { settings: Settings|null; onRefresh: () => void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setDrinksIndent: (n:number)=>void; setBeerLocalCellScale?: (n:number)=>void; setBeerLocalColumns?: (n:number)=>void; setBeerOverrideFlag?: (v:boolean)=>void; setDrinksOverrideFlag?: (v:boolean)=>void }) {
+function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksCellScale, localDrinksItemsPerCol, setLocalDrinksItemsPerCol, localBeerItemsPerCol, setLocalBeerItemsPerCol, localDrinksIndentPct, setDrinksIndent, setBeerLocalCellScale = () => {}, setBeerLocalColumns = () => {}, setBeerOverrideFlag = () => {}, setDrinksOverrideFlag = () => {}, showLocalOverrides = true }: { settings: Settings|null; onRefresh: () => void; localDrinksCellScale: number; setLocalDrinksCellScale: (n:number)=>void; localDrinksItemsPerCol: number; setLocalDrinksItemsPerCol: (n:number)=>void; localBeerItemsPerCol: number; setLocalBeerItemsPerCol: (n:number)=>void; localDrinksIndentPct: number; setDrinksIndent: (n:number)=>void; setBeerLocalCellScale?: (n:number)=>void; setBeerLocalColumns?: (n:number)=>void; setBeerOverrideFlag?: (v:boolean)=>void; setDrinksOverrideFlag?: (v:boolean)=>void; showLocalOverrides?: boolean }) {
   const [theme, setTheme] = useState<'light'|'dark'>(settings?.themeMode || 'dark')
   const [logoPreview, setLogoPreview] = useState<string | null>(settings?.logoAssetId ? `/api/assets/${settings.logoAssetId}/content` : null)
   const [bgPreview, setBgPreview] = useState<string | null>(settings?.backgroundAssetId ? `/api/assets/${settings.backgroundAssetId}/content` : null)
@@ -1130,13 +1130,15 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
       logoPadY: localLogoPadY,
       itemsPerPage: localItemsPerPage,
     }
-    // Only persist beer cell scale/columns to server when not locally overridden
-    if (!beerOverride) {
+    // Only persist beer cell scale/columns to server when not locally overridden (or when local overrides are hidden)
+    const effBeerOverride = showLocalOverrides ? beerOverride : false
+    const effDrinksOverride = showLocalOverrides ? drinksOverride : false
+    if (!effBeerOverride) {
       base.cellScale = localCellScale
       base.beerColumns = localBeerColumns
     }
     // Persist drinks styles to server when not locally overridden
-    if (!drinksOverride) {
+    if (!effDrinksOverride) {
       savingDrinksRef.current = true
       base.drinksCellScale = localDrinksCellScale
       base.drinksItemsPerCol = localDrinksItemsPerCol
@@ -1219,10 +1221,12 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
         <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
           <div className="font-semibold mb-2 flex items-center justify-between">
             <span>Beer Display</span>
-            <label className="text-xs flex items-center gap-2">
-              <input type="checkbox" checked={beerOverride} onChange={(e)=>{ const v=e.target.checked; setBeerOverride(v); try{ localStorage.setItem('beerLocalOverride', String(v)); if (v) { localStorage.setItem('beerLocal_cellScale', String(localCellScale)); localStorage.setItem('beerLocal_columns', String(localBeerColumns)); setBeerLocalCellScale(localCellScale); setBeerLocalColumns(localBeerColumns); } }catch{}; setBeerOverrideFlag(v); onRefresh() }} />
-              Use local override
-            </label>
+            {showLocalOverrides ? (
+              <label className="text-xs flex items-center gap-2">
+                <input type="checkbox" checked={beerOverride} onChange={(e)=>{ const v=e.target.checked; setBeerOverride(v); try{ localStorage.setItem('beerLocalOverride', String(v)); if (v) { localStorage.setItem('beerLocal_cellScale', String(localCellScale)); localStorage.setItem('beerLocal_columns', String(localBeerColumns)); setBeerLocalCellScale(localCellScale); setBeerLocalColumns(localBeerColumns); } }catch{}; setBeerOverrideFlag(v); onRefresh() }} />
+                Use local override
+              </label>
+            ) : null}
           </div>
           <div className="space-y-3">
             <div>
@@ -1243,10 +1247,12 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
         <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
           <div className="font-semibold mb-2 flex items-center justify-between">
             <span>Drinks Display</span>
-            <label className="text-xs flex items-center gap-2">
-              <input type="checkbox" checked={drinksOverride} onChange={(e)=>{ const v=e.target.checked; setDrinksOverride(v); try{ localStorage.setItem('drinksLocalOverride', String(v)); if (v) { localStorage.setItem('drinksCellScale', String(localDrinksCellScale)); localStorage.setItem('drinksItemsPerCol', String(localDrinksItemsPerCol)); localStorage.setItem('drinksIndentPct', String(localDrinksIndentPct)); } }catch{}; setDrinksOverrideFlag(v); onRefresh() }} />
-              Use local override
-            </label>
+            {showLocalOverrides ? (
+              <label className="text-xs flex items-center gap-2">
+                <input type="checkbox" checked={drinksOverride} onChange={(e)=>{ const v=e.target.checked; setDrinksOverride(v); try{ localStorage.setItem('drinksLocalOverride', String(v)); if (v) { localStorage.setItem('drinksCellScale', String(localDrinksCellScale)); localStorage.setItem('drinksItemsPerCol', String(localDrinksItemsPerCol)); localStorage.setItem('drinksIndentPct', String(localDrinksIndentPct)); } }catch{}; setDrinksOverrideFlag(v); onRefresh() }} />
+                Use local override
+              </label>
+            ) : null}
           </div>
           <div className="space-y-3">
             <div>
