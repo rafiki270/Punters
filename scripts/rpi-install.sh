@@ -16,17 +16,33 @@ KIOSK_USER=${KIOSK_USER:-kiosk}
 KIOSK_PASSWORD=${KIOSK_PASSWORD-}
 PIXEL_DOUBLE=${PIXEL_DOUBLE:-}
 
+# Load prior kiosk config to preselect defaults
+PREV_MODE=""
+PREV_CLIENT_URL=""
+if [[ -f /etc/default/punters-kiosk ]]; then
+  # shellcheck disable=SC1090
+  . /etc/default/punters-kiosk || true
+  if [[ -n "${MODE:-}" ]]; then PREV_MODE="$MODE"; fi
+  if [[ -n "${CLIENT_URL:-}" ]]; then PREV_CLIENT_URL="$CLIENT_URL"; fi
+fi
+
 echo "== Punters Raspberry Pi Installer =="
 echo "This will configure the Pi as a kiosk and autostart Chromium."
 echo
 
 read_mode() {
   local choice
+  local def_choice=1
+  # If we previously ran as client or have a stored URL, default to client
+  if [[ "$PREV_MODE" == "client" || -n "$PREV_CLIENT_URL" ]]; then
+    def_choice=2
+  fi
   while true; do
     echo "Select mode:"
     echo "  1) Server (host app on this Pi)"
     echo "  2) Client (open a remote server URL)"
-    read -rp "Enter 1 or 2: " choice || true
+    read -rp "Enter 1 or 2 [${def_choice}]: " choice || true
+    choice=${choice:-$def_choice}
     case "$choice" in
       1|server|Server) MODE=server; break;;
       2|client|Client) MODE=client; break;;
@@ -41,8 +57,15 @@ read_server_inputs() {
 }
 
 read_client_inputs() {
+  local prompt="Remote server address (e.g., server.local or http://server)"
+  local default="$PREV_CLIENT_URL"
   while true; do
-    read -rp "Remote server address (e.g., server.local or http://server): " CLIENT_URL || true
+    if [[ -n "$default" ]]; then
+      read -rp "$prompt [$default]: " CLIENT_URL || true
+      CLIENT_URL=${CLIENT_URL:-$default}
+    else
+      read -rp "$prompt: " CLIENT_URL || true
+    fi
     if [[ -n "${CLIENT_URL}" ]]; then
       # Normalize: prepend http:// if no scheme provided
       if [[ ! "$CLIENT_URL" =~ ^https?:// ]]; then
