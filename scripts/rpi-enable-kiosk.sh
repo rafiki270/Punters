@@ -137,11 +137,14 @@ if [[ -z "$DISPLAY" && "$(tty)" == "/dev/tty1" ]]; then
     mkdir -p "$LOG_DIR" 2>/dev/null || true
     LOG_FILE="$LOG_DIR/startx.log"
   fi
+  # Truncate the log on each login to avoid unbounded growth
+  : > "$LOG_FILE"
+  ts() { date '+%Y-%m-%d %H:%M:%S%z'; }
   while true; do
-    echo "[punters] launching X at $(date)" >> "$LOG_FILE"
+    echo "[$(ts)] [punters] launching X (xinit)" >> "$LOG_FILE"
     xinit "$HOME/.xinitrc" -- :0 -nocursor -nolisten tcp vt1 >> "$LOG_FILE" 2>&1
     rc=$?
-    echo "[punters] X exited rc=$rc at $(date). Restarting in 5s..." >> "$LOG_FILE"
+    echo "[$(ts)] [punters] X exited rc=$rc. Restarting in 5s..." >> "$LOG_FILE"
     sleep 5
   done
 fi

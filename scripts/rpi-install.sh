@@ -89,13 +89,23 @@ apt_install() {
 }
 
 enable_remote_access() {
+  local ENABLE_VNC=${ENABLE_VNC:-0}
   if command -v raspi-config >/dev/null 2>&1; then
     raspi-config nonint do_ssh 0 || true
-    raspi-config nonint do_vnc 0 || true
+    if [[ "$ENABLE_VNC" = "1" ]]; then
+      raspi-config nonint do_vnc 0 || true
+    else
+      raspi-config nonint do_vnc 1 || true
+      systemctl disable --now vncserver-x11-serviced >/dev/null 2>&1 || true
+    fi
   else
     systemctl enable --now ssh || true
-    apt-get install -y realvnc-vnc-server || true
-    systemctl enable --now vncserver-x11-serviced || true
+    if [[ "$ENABLE_VNC" = "1" ]]; then
+      apt-get install -y realvnc-vnc-server || true
+      systemctl enable --now vncserver-x11-serviced || true
+    else
+      systemctl disable --now vncserver-x11-serviced >/dev/null 2>&1 || true
+    fi
   fi
 }
 
