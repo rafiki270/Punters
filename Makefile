@@ -102,6 +102,7 @@ launch: ## One-shot dev: installs deps (unless SKIP_INSTALL=1), prepares DB, run
 	else \
 	  echo "No non-loopback IPv4 detected. You can still use http://localhost:5173 and http://localhost:3000"; \
 	fi
+	@echo "Cleaning Vite cache (web/node_modules/.vite)..." && rm -rf web/node_modules/.vite 2>/dev/null || true
 	@echo "Starting web dev server (5173) and API (3000)..."
 	@npm run -s dev:web & \
 	server_pid=$$!; \
@@ -135,6 +136,7 @@ launch80: ## One-shot dev on web port 80: installs deps (unless SKIP_INSTALL=1),
 	else \
 	  echo "No non-loopback IPv4 detected. You can still use http://localhost and http://localhost:3000"; \
 	fi
+	@echo "Cleaning Vite cache (web/node_modules/.vite)..." && rm -rf web/node_modules/.vite 2>/dev/null || true
 	@echo "Starting web dev server (80, host=0.0.0.0) and API (3000)..."
 	@(cd web && npx vite --host --port 80) & \
 	server_pid=$$!; \

@@ -310,6 +310,25 @@ function Display() {
     sock.on('tick', onTick)
     sock.on('sync_state', onSyncState)
     sock.on('identify', onIdentify)
+    sock.on('set_screen', (p: { screenIndex?: number; screenCount?: number }) => {
+      if (typeof p?.screenIndex === 'number') setScreenIndexParam(Math.max(1, p.screenIndex))
+      if (typeof p?.screenCount === 'number') setScreenCountParam(Math.max(1, p.screenCount))
+    })
+    sock.on('set_content', (p: { showBeer?: boolean; showDrinks?: boolean; showMedia?: boolean }) => {
+      try {
+        const showBeer = !!p?.showBeer
+        const showDrinks = !!p?.showDrinks
+        const showMedia = !!p?.showMedia
+        let nextMode: 'all'|'beer'|'drinks'|'ads' = 'all'
+        if (showBeer && showMedia) nextMode = 'all'
+        else if (showBeer && !showMedia) nextMode = 'beer'
+        else if (!showBeer && showMedia) nextMode = 'ads'
+        else nextMode = 'drinks'
+        setLocalDisplayMode(nextMode)
+        setLocalShowDrinks(showDrinks)
+        try { localStorage.setItem('localDisplayMode', nextMode); localStorage.setItem('localShowDrinks', String(showDrinks)) } catch {}
+      } catch {}
+    })
     socketRef.current = sock
     return () => {
       try {
@@ -319,6 +338,8 @@ function Display() {
         sock.off('tick', onTick)
         sock.off('sync_state', onSyncState)
         sock.off('identify', onIdentify)
+        sock.off('set_screen', () => {})
+        sock.off('set_content', () => {})
         // Only disconnect active sockets to avoid noisy browser errors
         if (sock.connected) { sock.emit('unregister_display'); sock.disconnect() }
       } catch {}
@@ -542,28 +563,7 @@ function Display() {
             </svg>
           )}
         </button>
-        {/* Screen sync controls */}
-        <div className="relative">
-          <button onClick={()=>setShowSync(s=>{ const next=!s; if (next) setAdminOpen(false); return next })} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Sync</button>
-          {showSync && (
-            <div className="absolute right-0 mt-2 w-64 rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 shadow-lg text-sm">
-              <div className="font-semibold mb-2">Screen Sync</div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="mr-2">Screen #</label>
-                <input type="number" min={1} value={screenIndexParam}
-                  onChange={(e)=>{ const v=Math.max(1, Number(e.target.value)||1); setScreenIndexParam(v); const u=new URL(window.location.href); if(v>1)u.searchParams.set('screenIndex',String(v)); else u.searchParams.delete('screenIndex'); window.history.replaceState({},'',u.toString()) }}
-                  className="w-20 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800" />
-              </div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="mr-2">Total screens</label>
-                <input type="number" min={1} value={screenCountParam}
-                  onChange={(e)=>{ const v=Math.max(1, Number(e.target.value)||1); setScreenCountParam(v); const u=new URL(window.location.href); if(v>1)u.searchParams.set('screenCount',String(v)); else u.searchParams.delete('screenCount'); window.history.replaceState({},'',u.toString()) }}
-                  className="w-20 px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800" />
-              </div>
-              <button onClick={()=>{ try { socketRef.current?.emit('sync_now') } catch {}; setShowSync(false) }} className="w-full px-3 py-1.5 rounded bg-green-600 text-white font-semibold">Sync Now</button>
-            </div>
-          )}
-        </div>
+        {/* Screen sync controls removed (moved to Arrangements) */}
         <button onClick={() => setAdminOpen((v) => { const next=!v; if (next) setShowSync(false); return next })} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
           {adminOpen ? 'Close Admin' : 'Admin'}
         </button>
@@ -1439,35 +1439,7 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
           </div>
         </div>
       )}
-      <div>
-        <label className="block text-sm mb-1">Display content</label>
-        <div className="flex items-center gap-3 text-sm">
-          <label className="flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={localDisplayMode !== 'ads'}
-              onChange={(e)=> setLocalDisplayMode(e.target.checked ? (localDisplayMode==='ads'?'all':'beer') : 'ads')}
-            />
-            Beers
-          </label>
-          <label className="flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={!!localShowDrinks}
-              onChange={(e)=> setLocalShowDrinks(e.target.checked)}
-            />
-            Drinks
-          </label>
-          <label className="flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={localDisplayMode !== 'beer'}
-              onChange={(e)=> setLocalDisplayMode(e.target.checked ? (localDisplayMode==='beer'?'all':'ads') : 'beer')}
-            />
-            Media
-          </label>
-        </div>
-      </div>
+      {/* Display content toggles removed from global Settings; moved to per-screen controls in Arrangements */}
       <button onClick={save} disabled={saving} className={`px-3 py-1.5 rounded bg-green-700 inline-flex items-center gap-2 ${saving?'opacity-80 cursor-not-allowed':''}`}>
         {saving && <span className="inline-block h-4 w-4 border-2 border-neutral-300 border-t-transparent rounded-full animate-spin" />}
         <span>Save</span>

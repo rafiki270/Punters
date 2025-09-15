@@ -200,6 +200,51 @@ async function buildServer() {
       }))
     return list
   })
+  // API: set display layout order (drag-and-drop from admin)
+  app.post('/api/clients/displays/layout', { preHandler: requireAdmin }, async (req, reply) => {
+    try {
+      const body = (req as any).body || {}
+      const ids: string[] = Array.isArray(body?.ids) ? body.ids.map(String) : []
+      if (!ids.length) return reply.code(400).send({ error: 'ids required' })
+      const total = ids.length
+      ids.forEach((id, idx) => {
+        const d = displays.get(id)
+        if (d) {
+          d.screenIndex = idx + 1
+          d.screenCount = total
+          displays.set(id, d)
+          io.to(id).emit('set_screen', { screenIndex: d.screenIndex, screenCount: d.screenCount })
+        }
+      })
+      // Sync all displays to the same anchor time so pages rotate together
+      const now = Date.now()
+      io.emit('sync_state', { anchorMs: now })
+      return { ok: true }
+    } catch (e) {
+      return reply.code(500).send({ error: 'failed' })
+    }
+  })
+
+  // API: manual sync-now (like old Sync button)
+  app.post('/api/clients/sync-now', { preHandler: requireAdmin }, async (_req, _reply) => {
+    const now = Date.now()
+    anchorMs = now
+    io.emit('sync_state', { anchorMs, cycleOffset })
+    return { ok: true }
+  })
+
+  // API: set display content (per browser)
+  app.post('/api/clients/displays/:id/content', { preHandler: requireAdmin }, async (req, reply) => {
+    const id = String((req.params as any).id)
+    const sock = io.sockets.sockets.get(id)
+    if (!sock) return reply.code(404).send({ error: 'Display not connected' })
+    const body = (req as any).body || {}
+    const showBeer = !!body.showBeer
+    const showDrinks = !!body.showDrinks
+    const showMedia = !!body.showMedia
+    io.to(id).emit('set_content', { showBeer, showDrinks, showMedia })
+    return { ok: true }
+  })
 
   // API: ask a specific display to show its identifier
   app.post('/api/clients/displays/:id/identify', { preHandler: requireAdmin }, async (req, reply) => {
