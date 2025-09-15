@@ -72,6 +72,8 @@ export default function ArrangementsPanel() {
   }
 
   const refresh = async () => {
+    // Instruct all connected browsers to hard-refresh, then update the list
+    try { await fetch('/api/clients/reload', { method:'POST' }) } catch {}
     try { const r = await fetch('/api/clients/displays'); const d = await r.json(); setClients(Array.isArray(d)?d:[]) } catch {}
   }
   const syncNow = async () => { if (syncing) return; setSyncing(true); try { await fetch('/api/clients/sync-now', { method:'POST' }) } finally { setTimeout(()=>setSyncing(false), 500) } }

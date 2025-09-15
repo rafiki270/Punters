@@ -312,6 +312,7 @@ function Display() {
     sock.on('tick', onTick)
     sock.on('sync_state', onSyncState)
     sock.on('identify', onIdentify)
+    sock.on('reload', () => { try { window.location.reload() } catch {} })
     sock.on('set_screen', (p: { screenIndex?: number; screenCount?: number }) => {
       if (typeof p?.screenIndex === 'number') setScreenIndexParam(Math.max(1, p.screenIndex))
       if (typeof p?.screenCount === 'number') setScreenCountParam(Math.max(1, p.screenCount))
@@ -342,6 +343,7 @@ function Display() {
         sock.off('identify', onIdentify)
         sock.off('set_screen', () => {})
         sock.off('set_content', () => {})
+        sock.off('reload', () => {})
         // Only disconnect active sockets to avoid noisy browser errors
         if (sock.connected) { sock.emit('unregister_display'); sock.disconnect() }
       } catch {}

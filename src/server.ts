@@ -234,6 +234,12 @@ async function buildServer() {
     return { ok: true }
   })
 
+  // API: request all connected display browsers to hard-refresh
+  app.post('/api/clients/reload', { preHandler: requireAdmin }, async (_req, _reply) => {
+    io.emit('reload', { hard: true })
+    return { ok: true }
+  })
+
   // API: set display content (per browser)
   app.post('/api/clients/displays/:id/content', { preHandler: requireAdmin }, async (req, reply) => {
     const id = String((req.params as any).id)
