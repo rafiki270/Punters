@@ -4,6 +4,7 @@ import fastifyCors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
 import { Server as IOServer } from 'socket.io';
+import { promises as dns } from 'node:dns';
 import { registerSettingsRoutes } from './routes/settings';
 import { registerSizeRoutes } from './routes/sizes';
 import { registerBeerRoutes } from './routes/beers';
@@ -18,7 +19,8 @@ import { registerNetworkRoutes } from './routes/network';
 import { registerBackupRoutes } from './routes/backup';
 import { onChange } from './events';
 import { registerDrinkRoutes } from './routes/drinks';
-import { startDiscovery, getDiscovered, suggestUniqueName } from './discovery';
+import { startDiscovery, getDiscovered, suggestUniqueName, getMdnsHostByIp } from './discovery';
+import { getClientPrefs, setClientPrefs } from './store/displayPrefs';
 import os from 'node:os';
 import { prisma } from './db';
 import cookie from '@fastify/cookie';
@@ -135,7 +137,7 @@ async function buildServer() {
   // Socket.IO
   const io = new IOServer(app.server, { cors: { origin: true } });
   // Track connected display browsers (memory-only)
-  type DisplayClient = { id: string; address?: string|null; screenIndex?: number; screenCount?: number; deviceId?: number|null; connectedAt: number }
+  type DisplayClient = { id: string; clientId?: string|null; address?: string|null; host?: string|null; ua?: string|null; label?: string|null; showBeer?: boolean; showDrinks?: boolean; showMedia?: boolean; screenIndex?: number; screenCount?: number; deviceId?: number|null; connectedAt: number }
   const displays = new Map<string, DisplayClient>()
   // Global sync state (memory-only)
   let cycleOffset = 0;
@@ -143,17 +145,105 @@ async function buildServer() {
   io.on('connection', (socket) => {
     app.log.info({ id: socket.id }, 'socket connected');
     // Register display clients
-    socket.on('register_display', (p: { screenIndex?: number; screenCount?: number; deviceId?: number|null }) => {
+    socket.on('register_display', async (p: { screenIndex?: number; screenCount?: number; deviceId?: number|null; clientIp?: string; label?: string; clientId?: string }) => {
+      const fwd = (socket.handshake.headers['x-forwarded-for'] as string | undefined) || (socket.handshake.headers['x-real-ip'] as string | undefined)
+      const forwardedIp = fwd ? fwd.split(',')[0].trim() : undefined
+      const remoteAddr = (p as any)?.clientIp || forwardedIp || socket.handshake.address || (socket.conn as any)?.remoteAddress || null
+      // Normalize IP and detect local loopback
+      const ipNorm = remoteAddr && remoteAddr.startsWith('::ffff:') ? remoteAddr.slice(7) : remoteAddr
+      const isLoopback = !!ipNorm && (ipNorm === '::1' || ipNorm.startsWith('127.'))
+
       const info: DisplayClient = {
         id: socket.id,
-        address: (socket.handshake as any)?.address || null,
-        screenIndex: typeof p?.screenIndex === 'number' ? p.screenIndex : undefined,
-        screenCount: typeof p?.screenCount === 'number' ? p.screenCount : undefined,
+        clientId: (typeof p?.clientId === 'string' && p.clientId) ? p.clientId : null,
+        address: remoteAddr,
+        host: isLoopback ? (os.hostname() || null) : null,
+        ua: (socket.handshake.headers['user-agent'] as string | undefined) || null,
+        label: (typeof p?.label === 'string' && p.label.trim()) ? p.label.trim() : null,
+        showBeer: true,
+        showDrinks: true,
+        showMedia: false,
+        screenIndex: (typeof p?.screenIndex === 'number' && p.screenIndex > 0) ? p.screenIndex : undefined,
+        screenCount: (typeof p?.screenCount === 'number' && p.screenCount > 0) ? p.screenCount : undefined,
         deviceId: typeof p?.deviceId === 'number' ? p.deviceId : null,
         connectedAt: Date.now(),
       }
+      // Load persisted prefs if clientId provided
+      try {
+        if (info.clientId) {
+          const pref = await getClientPrefs(info.clientId)
+          if (pref) {
+            if (typeof pref.label === 'string') info.label = pref.label
+            if (typeof pref.showBeer === 'boolean') info.showBeer = pref.showBeer
+            if (typeof pref.showDrinks === 'boolean') info.showDrinks = pref.showDrinks
+            if (typeof pref.showMedia === 'boolean') info.showMedia = pref.showMedia
+          }
+        }
+      } catch {}
       displays.set(socket.id, info)
       app.log.info({ id: socket.id, info }, 'display registered')
+      // Try reverse DNS for a friendly host label (non-blocking)
+      if (!info.host && info.address) {
+        // Strip IPv6-mapped IPv4 prefix if present
+        const ip = info.address.startsWith('::ffff:') ? info.address.slice(7) : info.address
+        // First, try mDNS workstation mapping
+        const mdns = getMdnsHostByIp(ip)
+        if (mdns) {
+          const d = displays.get(socket.id)
+          if (d) { d.host = mdns; displays.set(socket.id, d) }
+        } else {
+          dns.reverse(ip).then(names => {
+          const d = displays.get(socket.id)
+          if (!d) return
+          d.host = (names && names[0]) ? names[0] : null
+          displays.set(socket.id, d)
+        }).catch(() => {})
+        }
+      }
+      // Normalize: ensure unique screenIndex per connected client and consistent screenCount
+      const d = displays.get(socket.id)
+      if (d) {
+        // Build set of used indices excluding current client
+        const used = new Set<number>()
+        for (const [id, val] of displays.entries()) {
+          if (id === socket.id) continue
+          if (typeof val.screenIndex === 'number' && val.screenIndex > 0) used.add(val.screenIndex)
+        }
+        let idx = (typeof d.screenIndex === 'number' && d.screenIndex > 0) ? d.screenIndex : 1
+        // If index is already used, pick the smallest free positive integer
+        while (used.has(idx)) idx += 1
+        d.screenIndex = idx
+        // Set screenCount to number of connected displays (upper bound for rotation window)
+        d.screenCount = Math.max(used.size + 1, d.screenCount || 1)
+      displays.set(socket.id, d)
+      // Broadcast consistent screenCount to all clients
+      const countAll = displays.size
+      for (const [cid, val] of displays.entries()) {
+        const idx = (typeof val.screenIndex === 'number' && val.screenIndex > 0) ? val.screenIndex : 1
+        io.to(cid).emit('set_screen', { screenIndex: idx, screenCount: countAll })
+      }
+      }
+    })
+    // Allow client to update its observed IP after connect (from /api/ip)
+    socket.on('update_client', (p: { clientIp?: string }) => {
+      try {
+        const d = displays.get(socket.id)
+        if (!d) return
+        if (p?.clientIp && typeof p.clientIp === 'string') {
+          d.address = p.clientIp
+          // Re-resolve hostname via mDNS or reverse DNS
+          const ip = d.address.startsWith('::ffff:') ? d.address.slice(7) : d.address
+          const mdns = getMdnsHostByIp(ip)
+          if (mdns) d.host = mdns
+          else dns.reverse(ip).then(names => {
+            const cur = displays.get(socket.id)
+            if (!cur) return
+            cur.host = (names && names[0]) ? names[0] : null
+            displays.set(socket.id, cur)
+          }).catch(()=>{})
+          displays.set(socket.id, d)
+        }
+      } catch {}
     })
     socket.on('unregister_display', () => {
       displays.delete(socket.id)
@@ -173,6 +263,12 @@ async function buildServer() {
     socket.on('disconnect', () => {
       displays.delete(socket.id)
       app.log.info({ id: socket.id }, 'socket disconnected')
+      // Keep indices, but update everyone with new screenCount
+      const countAll = displays.size
+      for (const [cid, val] of displays.entries()) {
+        const idx = (typeof val.screenIndex === 'number' && val.screenIndex > 0) ? val.screenIndex : 1
+        io.to(cid).emit('set_screen', { screenIndex: idx, screenCount: countAll })
+      }
     });
   });
 
@@ -189,17 +285,41 @@ async function buildServer() {
 
   // API: list connected display browsers
   app.get('/api/clients/displays', async () => {
-    const list = Array.from(displays.values())
-      .sort((a,b) => (a.connectedAt - b.connectedAt))
-      .map((x, i) => ({
-        id: x.id,
-        n: i+1,
-        address: x.address || undefined,
-        screenIndex: x.screenIndex,
-        screenCount: x.screenCount,
-        deviceId: x.deviceId ?? undefined,
-      }))
-    return list
+    const vals = Array.from(displays.values())
+    const withIdx = vals.filter(v => typeof v.screenIndex === 'number' && (v.screenIndex as number) > 0)
+    const withoutIdx = vals.filter(v => !(typeof v.screenIndex === 'number' && (v.screenIndex as number) > 0))
+    withIdx.sort((a,b) => (Number(a.screenIndex) - Number(b.screenIndex)))
+    withoutIdx.sort((a,b) => (a.connectedAt - b.connectedAt))
+    const ordered = [...withIdx, ...withoutIdx]
+    return ordered.map((x, i) => ({
+      id: x.id,
+      // UI label index: contiguous 1..N for display order
+      n: i + 1,
+      address: x.address || undefined,
+      host: x.host || undefined,
+      ua: x.ua || undefined,
+      label: x.label || undefined,
+      showBeer: x.showBeer ?? true,
+      showDrinks: x.showDrinks ?? true,
+      showMedia: x.showMedia ?? false,
+      screenIndex: x.screenIndex,
+      screenCount: x.screenCount,
+      deviceId: x.deviceId ?? undefined,
+    }))
+  })
+
+  // Set a friendly label for a specific display (persisted in memory; client also receives and can store locally)
+  app.post('/api/clients/displays/:id/label', { preHandler: requireAdmin }, async (req, reply) => {
+    const id = String((req.params as any).id)
+    const body = (req as any).body || {}
+    const label = (typeof body?.label === 'string') ? body.label.trim() : ''
+    const d = displays.get(id)
+    if (!d) return reply.code(404).send({ error: 'Display not connected' })
+    d.label = label || null
+    displays.set(id, d)
+    try { if (d.clientId) await setClientPrefs(d.clientId, { label: d.label || '' }) } catch {}
+    try { io.to(id).emit('set_label', { label: d.label || '' }) } catch {}
+    return { ok: true }
   })
   // API: set display layout order (drag-and-drop from admin)
   app.post('/api/clients/displays/layout', { preHandler: requireAdmin }, async (req, reply) => {
@@ -220,6 +340,7 @@ async function buildServer() {
       // Sync all displays to the same anchor time so pages rotate together
       const now = Date.now()
       io.emit('sync_state', { anchorMs: now })
+      io.emit('admin_changed', { kind: 'layout' })
       return { ok: true }
     } catch (e) {
       return reply.code(500).send({ error: 'failed' })
@@ -249,7 +370,11 @@ async function buildServer() {
     const showBeer = !!body.showBeer
     const showDrinks = !!body.showDrinks
     const showMedia = !!body.showMedia
+    const d = displays.get(id)
+    if (d) { d.showBeer = showBeer; d.showDrinks = showDrinks; d.showMedia = showMedia; displays.set(id, d) }
+    try { if (d?.clientId) await setClientPrefs(d.clientId, { showBeer, showDrinks, showMedia }) } catch {}
     io.to(id).emit('set_content', { showBeer, showDrinks, showMedia })
+    io.emit('admin_changed', { kind: 'content', id })
     return { ok: true }
   })
 

@@ -10,6 +10,12 @@ let currentMode: 'server'|'client' = 'server'
 let bonjourInst: any = null
 let currentPort = 0
 let currentName: string | undefined
+// mDNS workstation scan: IP -> host mapping
+const ipHostMap = new Map<string, string>()
+
+export function getMdnsHostByIp(ip: string): string | undefined {
+  return ipHostMap.get(ip)
+}
 
 export function getMode() { return currentMode }
 export function getDiscovered(): DiscoveredServer[] { return list }
@@ -18,6 +24,8 @@ export function startDiscovery(port: number, mode: 'server'|'client', preferredN
   currentPort = port
   if (!bonjourInst) bonjourInst = new (Bonjour as any)()
   setConfig({ mode, name: preferredName })
+  // Start/refresh workstation browser to collect IP->hostname
+  try { startWorkstationBrowser() } catch {}
 }
 
 export function setMode(mode: 'server'|'client') { setConfig({ mode }) }
@@ -44,6 +52,36 @@ export async function setConfig({ mode, name }: { mode?: 'server'|'client'; name
     browserInst.on('up', (svc: any) => updateList(svc))
     browserInst.on('down', (svc: any) => removeFromList(svc))
   }
+  // Ensure workstation browser is running
+  try { startWorkstationBrowser() } catch {}
+}
+
+let workstationBrowser: any = null
+function startWorkstationBrowser() {
+  if (!bonjourInst) bonjourInst = new (Bonjour as any)()
+  if (workstationBrowser) return
+  workstationBrowser = bonjourInst.find({ type: 'workstation' })
+  workstationBrowser.on('up', (svc: any) => {
+    const host = (svc.host || '').replace(/\.local$/i, '')
+    const addrs: string[] = Array.isArray(svc.addresses) ? svc.addresses : []
+    for (const a of addrs) {
+      if (typeof a === 'string') {
+        const ip = a.startsWith('::ffff:') ? a.slice(7) : a
+        // Prefer IPv4; store mapping
+        ipHostMap.set(ip, host || svc.name || 'device')
+      }
+    }
+  })
+  workstationBrowser.on('down', (svc: any) => {
+    const addrs: string[] = Array.isArray(svc.addresses) ? svc.addresses : []
+    for (const a of addrs) {
+      const ip = typeof a === 'string' && a.startsWith('::ffff:') ? a.slice(7) : a
+      if (typeof ip === 'string') {
+        // Remove mapping for this service; if multiple services share IP, a future 'up' will restore
+        ipHostMap.delete(ip)
+      }
+    }
+  })
 }
 
 function updateList(svc: any) {

@@ -273,6 +273,8 @@ function Display() {
   // Live updates: listen for server change events and reload
   useEffect(() => {
     let url: string | undefined = undefined
+    const clientIpRef: { current: string | undefined } = { current: undefined }
+    try { fetch('/api/ip').then(r=>r.json()).then(info=>{ if (info && typeof info.clientIp === 'string') clientIpRef.current = info.clientIp }) } catch {}
     if (mode === 'client' && remoteBase) {
       url = remoteBase
     } else {
@@ -302,9 +304,14 @@ function Display() {
     }
     const onConnect = () => {
       try {
-        sock.emit('register_display', { screenIndex: screenIndexParam, screenCount: screenCountParam, deviceId })
+        const label = (()=>{ try { return localStorage.getItem('displayLabel') || undefined } catch { return undefined } })()
+        const clientId = (()=>{ try { let v = localStorage.getItem('displayClientId'); if (!v) { v = `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`; localStorage.setItem('displayClientId', v) } return v } catch { return undefined } })()
+        sock.emit('register_display', { screenIndex: screenIndexParam, screenCount: screenCountParam, deviceId, clientIp: clientIpRef.current, label, clientId })
       } catch {}
     }
+    const ipWatcher = window.setInterval(() => {
+      try { if (clientIpRef.current) { sock.emit('update_client', { clientIp: clientIpRef.current }); window.clearInterval(ipWatcher) } } catch {}
+    }, 500)
     const onConnectError = () => { /* suppress noisy dev errors */ }
     sock.on('connect', onConnect)
     sock.on('connect_error', onConnectError)
@@ -322,15 +329,18 @@ function Display() {
         const showBeer = !!p?.showBeer
         const showDrinks = !!p?.showDrinks
         const showMedia = !!p?.showMedia
-        let nextMode: 'all'|'beer'|'drinks'|'ads' = 'all'
-        if (showBeer && showMedia) nextMode = 'all'
-        else if (showBeer && !showMedia) nextMode = 'beer'
-        else if (!showBeer && showMedia) nextMode = 'ads'
-        else nextMode = 'drinks'
+        let nextMode: 'all'|'beer'|'drinks'|'ads'
+        if (showBeer && showDrinks && !showMedia) nextMode = 'all'
+        else if (showBeer && !showDrinks && !showMedia) nextMode = 'beer'
+        else if (!showBeer && showDrinks && !showMedia) nextMode = 'drinks'
+        else nextMode = 'ads'
         setLocalDisplayMode(nextMode)
         setLocalShowDrinks(showDrinks)
         try { localStorage.setItem('localDisplayMode', nextMode); localStorage.setItem('localShowDrinks', String(showDrinks)) } catch {}
       } catch {}
+    })
+    sock.on('set_label', (p: { label?: string }) => {
+      try { localStorage.setItem('displayLabel', String(p?.label || '')) } catch {}
     })
     socketRef.current = sock
     return () => {
@@ -344,6 +354,8 @@ function Display() {
         sock.off('set_screen', () => {})
         sock.off('set_content', () => {})
         sock.off('reload', () => {})
+        sock.off('set_label', () => {})
+        window.clearInterval(ipWatcher)
         // Only disconnect active sockets to avoid noisy browser errors
         if (sock.connected) { sock.emit('unregister_display'); sock.disconnect() }
       } catch {}
@@ -458,26 +470,51 @@ function Display() {
     if (device && device.displayMode !== 'inherit') modeEff = device.displayMode
     else modeEff = localDisplayMode
     const filtered = s.filter(sl => {
-      if (modeEff === 'all') return true
-      if (modeEff === 'beer') return sl.type==='beer' || (localShowDrinks && sl.type==='drinks')
-      if (modeEff === 'drinks') return sl.type==='drinks'
-      return (sl.type==='ad' || sl.type==='adpair')
+      if (modeEff === 'all') return (sl.type === 'beer' || sl.type === 'drinks')
+      if (modeEff === 'beer') return sl.type === 'beer'
+      if (modeEff === 'drinks') return sl.type === 'drinks'
+      return (sl.type === 'ad' || sl.type === 'adpair')
     })
     return filtered.length ? filtered : [{ type: 'beer', data: [] }]
   }, [beerPages, ads, drinks, drinkCategories, localDisplayMode, localShowDrinks, device?.displayMode, columns, effDrinksItemsPerCol])
 
   // Derive synchronized page index when enabled
   const rotation = settings?.rotationSec ?? 90
-  const slidesLen = Math.max(1, slides.length)
+  const slidesLen = Math.max(0, slides.length)
   const baseSeconds = anchorMs ? Math.max(0, (epoch - anchorMs) / 1000) : (epoch / 1000)
   const cycle = Math.floor(baseSeconds / Math.max(1, rotation)) + cycleOffset
-  const baseIdx = (cycle * Math.max(1, screenCountParam)) % slidesLen
-  const syncPageIdx = (baseIdx + Math.max(1, screenIndexParam) - 1) % slidesLen
-  const effPageIdx = syncEnabled ? syncPageIdx : (pageIdx % slidesLen)
   const effSecs = syncEnabled ? (rotation - Math.floor((baseSeconds) % Math.max(1, rotation))) : secs
-  const cur = slides[effPageIdx]
-  const curIsAd = cur.type === 'ad' || cur.type === 'adpair'
-  const curIsFullscreen = cur.type === 'ad' && (cur.data as Ad)?.fullscreen
+  let cur: any | null = null
+  let curIdx: number | null = null
+  if (slidesLen > 0) {
+    // Determine effective content mode for this screen
+    let modeEff: 'all'|'beer'|'drinks'|'ads' = 'all'
+    if (device && device.displayMode !== 'inherit') modeEff = device.displayMode
+    else modeEff = localDisplayMode
+
+    if (modeEff === 'all') {
+      // Distributed across screens using screenIndex/count
+      const sc = Math.max(1, screenCountParam)
+      const si = Math.max(1, screenIndexParam)
+      if (slidesLen <= sc) {
+        const idx = si - 1
+        if (idx < slidesLen) { cur = slides[idx]; curIdx = idx } else { cur = null; curIdx = null }
+      } else {
+        const groupStart = (cycle * sc) % slidesLen
+        const idx = (groupStart + si - 1) % slidesLen
+        cur = slides[idx]
+        curIdx = idx
+      }
+    } else {
+      // Independent rotation for filtered content (beer-only, drinks-only, ads-only)
+      const idx = Math.floor(baseSeconds / Math.max(1, rotation)) % slidesLen
+      cur = slides[idx]
+      curIdx = idx
+    }
+  }
+  const curType = cur?.type as any
+  const curIsAd = curType === 'ad' || curType === 'adpair'
+  const curIsFullscreen = curType === 'ad' && (cur?.data as Ad)?.fullscreen
   const footPadPx = ((settings?.showFooter !== false) && !curIsFullscreen) ? 96 : 24
 
   const contentBase = (mode==='client' && remoteBase) ? remoteBase : ''
@@ -609,7 +646,7 @@ function Display() {
 
       {/* Optional logo */}
   {(() => {
-        const adObj: Ad | null = cur.type === 'ad' ? (cur.data as Ad) : null
+        const adObj: Ad | null = (cur && cur.type === 'ad') ? (cur.data as Ad) : null
         const showLogo = !!logoUrl && (
           !curIsAd ? true : (
             curIsFullscreen ? (adObj?.requireLogo === true) : true
@@ -660,7 +697,9 @@ function Display() {
           No server selected. Open Admin → Server tab to choose or enter the main server URL.
         </div>
       )}
-      {cur.type === 'beer' ? (
+      {!cur ? (
+        <div className="h-[80vh]" style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : 0 }} />
+      ) : cur.type === 'beer' ? (
         <div style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : 0 }}>
           {tapBeers.length === 0 ? (
             <div className="h-[80vh] flex items-center justify-center text-center">
@@ -792,9 +831,9 @@ function Display() {
       {(settings?.showFooter !== false) && !curIsFullscreen && (
         <div className="fixed inset-x-0 bottom-3 flex justify-center">
           <div className="px-7 py-2 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
-            {slides.length > 1 && (
+            {slides.length > 1 && (curIdx != null) && (
               <div className="flex items-center gap-3">
-                <span>Page { (effPageIdx % slides.length) + 1 } of { slides.length } • changes in {effSecs} seconds</span>
+                <span>Page { (curIdx + 1) } of { slides.length } • changes in {effSecs} seconds</span>
               </div>
             )}
             <div className="text-[10px] leading-tight opacity-80">© Not That California R&D</div>
