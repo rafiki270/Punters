@@ -356,7 +356,8 @@ function Display() {
   const [cycleOffset, setCycleOffset] = useState<number>(0)
   const [anchorMs, setAnchorMs] = useState<number|null>(null)
   const socketRef = useRef<Socket|null>(null)
-  const syncEnabled = (screenCountParam > 1 || screenIndexParam > 1)
+  // Always enable server-time-based sync so all displays switch together
+  const syncEnabled = true
 
   // Local fallback timer (disabled when sync is enabled)
   useEffect(() => {
@@ -553,7 +554,7 @@ function Display() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
           )}
         </button>
-        <button onClick={()=>{ try { socketRef.current?.emit('next_page') } catch {}; setPageIdx(p=>p+1); setSecs(settings?.rotationSec ?? 90) }} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" aria-label="Next Page">
+        <button onClick={()=>{ try { socketRef.current?.emit('next_page') } catch {} }} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" aria-label="Next Page">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M7 6h2v12H7zM11 6l8 6-8 6z"/></svg>
         </button>
         <button onClick={toggleFullscreen} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
