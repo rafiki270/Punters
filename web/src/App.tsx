@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import BeerCell from './components/BeerCell'
 import ArrangementsPanel from './admin/panels/ArrangementsPanel'
+import BackupPanel from './admin/panels/BackupPanel'
 import { io, Socket } from 'socket.io-client'
 
 type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'drinks'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean; drinksCellScale?: number; drinksItemsPerCol?: number; drinksIndentPct?: number }
@@ -1494,69 +1495,7 @@ function SizesPanel({ onRefresh }: { onRefresh: () => void }) {
   )
 }
 
-function BackupPanel() {
-  const [file, setFile] = useState<File | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  async function downloadDb() {
-    try {
-      const res = await fetch('/api/admin/backup/db', { credentials: 'include' })
-      if (!res.ok) throw new Error('Download failed')
-      const blob = await res.blob()
-      // Try to extract filename from header
-      const disp = res.headers.get('Content-Disposition') || ''
-      const match = /filename="?([^";]+)"?/i.exec(disp)
-      const filename = match?.[1] || 'punters-backup.db'
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      alert('Failed to download backup')
-    }
-  }
-
-  async function restoreDb() {
-    if (!file) { alert('Choose a .db file first'); return }
-    if (!confirm('Restore database from selected file? This will overwrite current data.')) return
-    setBusy(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/admin/restore/db', { method: 'POST', body: fd, credentials: 'include' })
-      if (!res.ok) {
-        const msg = await res.text().catch(()=> '')
-        throw new Error(msg || 'Restore failed')
-      }
-      alert('Restore completed. The app will reload to apply changes.')
-      window.location.reload()
-    } catch (e) {
-      alert('Failed to restore backup')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4 text-sm">
-      <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
-        <div className="font-semibold mb-2">Download Backup</div>
-        <div className="opacity-80 mb-2">Export the entire database (SQLite) as a .db file.</div>
-        <LoadingButton onClick={downloadDb} className="px-3 py-1.5 rounded bg-blue-600 text-white">Download Database</LoadingButton>
-      </div>
-      <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
-        <div className="font-semibold mb-2">Restore Backup</div>
-        <div className="opacity-80 mb-2">Upload a previously downloaded .db file to restore. This will overwrite current data.</div>
-        <input type="file" accept=".db,application/octet-stream" onChange={e=>setFile(e.target.files?.[0] || null)} className="mb-2" />
-        <LoadingButton onClick={restoreDb} className={`px-3 py-1.5 rounded bg-red-700 text-white ${busy?'opacity-80 cursor-not-allowed':''}`}>Restore Database</LoadingButton>
-      </div>
-    </div>
-  )
-}
+// BackupPanel moved to web/src/admin/panels/BackupPanel.tsx
 
 function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void }) {
   const [beers, setBeers] = useState<Beer[]>([])
