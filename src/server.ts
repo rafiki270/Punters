@@ -19,6 +19,7 @@ import { registerBackupRoutes } from './routes/backup';
 import { onChange } from './events';
 import { registerDrinkRoutes } from './routes/drinks';
 import { startDiscovery, getDiscovered, suggestUniqueName } from './discovery';
+import os from 'node:os';
 import { prisma } from './db';
 import cookie from '@fastify/cookie';
 import fs from 'node:fs';
@@ -69,10 +70,10 @@ async function buildServer() {
   try {
     const s = await prisma.globalSettings.findUnique({ where: { id: 1 } })
     const mode = (s?.mode as any) || 'server'
-    const preferredName = (s as any)?.instanceName || (mode === 'server' ? 'punters-server' : 'punters-client')
+    const preferredName = (os.hostname() || 'punters-server')
     startDiscovery(PORT, mode, preferredName)
   } catch {
-    startDiscovery(PORT, 'server', 'punters-server')
+    startDiscovery(PORT, 'server', os.hostname() || 'punters-server')
   }
   await registerDisplayRoutes(app);
 

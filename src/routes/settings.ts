@@ -95,9 +95,8 @@ export async function registerSettingsRoutes(app: FastifyInstance) {
       })))
     }
     const desiredMode = (parsed as any).mode
-    const desiredName = (parsed as any).instanceName ?? (req as any).body?.instanceName
-    if (desiredMode || desiredName) {
-      await setConfig({ mode: desiredMode, name: desiredName })
+    if (desiredMode) {
+      await setConfig({ mode: desiredMode })
     }
     emitChange('settings')
     return reply.send(updated)

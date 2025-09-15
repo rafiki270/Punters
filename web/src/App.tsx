@@ -864,7 +864,7 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
             </div>
             <button onClick={onClose} className="px-3 py-1.5 rounded bg-neutral-700 text-white border border-neutral-800 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Close</button>
           </div>
-        {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={async()=>{ await onRefresh(); setUiMode((await fetch('/api/mode').then(r=>r.json()).catch(()=>({mode}))).mode) }} localDisplayMode={localDisplayMode} setLocalDisplayMode={setLocalDisplayMode} localShowDrinks={localShowDrinks} setLocalShowDrinks={setLocalShowDrinks} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={setLocalDrinksCellScale} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={setLocalDrinksItemsPerCol} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={setLocalBeerItemsPerCol} servers={servers} remoteBase={remoteBase} onSelectServer={onSelectServer} onLocalModeChange={(m)=>{ setUiMode(m); }} />}
+        {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={onRefresh} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} localDrinksIndentPct={localDrinksIndentPct} setDrinksIndent={setLocalDrinksIndentPct} setBeerLocalCellScale={setBeerLocalCellScale} setBeerLocalColumns={setBeerLocalColumns} setBeerOverrideFlag={setBeerOverrideFlag} setDrinksOverrideFlag={setDrinksOverrideFlag} />}
         {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={onRefresh} />}
@@ -949,7 +949,7 @@ function AdminPage() {
           ))}
         </div>
       </div>
-      {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={loadAll} localDisplayMode={localDisplayMode} setLocalDisplayMode={(v)=>{ setLocalDisplayMode(v); localStorage.setItem('localDisplayMode', v) }} localShowDrinks={localShowDrinks} setLocalShowDrinks={(v)=>{ setLocalShowDrinks(v); localStorage.setItem('localShowDrinks', String(v)) }} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} servers={servers} remoteBase={remoteBase} onSelectServer={(url)=>{ localStorage.setItem('remoteServer', url); setRemoteBase(url); loadAll() }} onLocalModeChange={(m)=>{ setUiMode(m) }} />}
+      {tab === 'settings' && <SettingsPanel sizes={sizes} settings={settings} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'style' && <StylePanel settings={settings} onRefresh={loadAll} localDrinksCellScale={localDrinksCellScale} setLocalDrinksCellScale={(n)=>{ setLocalDrinksCellScale(n); localStorage.setItem('drinksCellScale', String(n)) }} localDrinksItemsPerCol={localDrinksItemsPerCol} setLocalDrinksItemsPerCol={(n)=>{ setLocalDrinksItemsPerCol(n); localStorage.setItem('drinksItemsPerCol', String(n)) }} localBeerItemsPerCol={localBeerItemsPerCol} setLocalBeerItemsPerCol={(n)=>{ setLocalBeerItemsPerCol(n); localStorage.setItem('beerItemsPerCol', String(n)) }} localDrinksIndentPct={adminDrinksIndentPct} setDrinksIndent={(n)=>{ setAdminDrinksIndentPct(n); localStorage.setItem('drinksIndentPct', String(n)) }} showLocalOverrides={false} />}
       {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={loadAll} />}
@@ -1340,16 +1340,12 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
   )
 }
 
-function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalDisplayMode, localShowDrinks, setLocalShowDrinks, localBeerColumns, setLocalBeerColumns, localItemsPerPage, setLocalItemsPerPage, servers, remoteBase, onSelectServer, onLocalModeChange }: { sizes: Size[]; settings: Settings|null; onRefresh: () => void; localDisplayMode: 'all'|'beer'|'drinks'|'ads'; setLocalDisplayMode: (v:'all'|'beer'|'drinks'|'ads')=>void; localShowDrinks: boolean; setLocalShowDrinks: (v:boolean)=>void; localBeerColumns: number; setLocalBeerColumns: (n:number)=>void; localItemsPerPage: number; setLocalItemsPerPage: (n:number)=>void; servers: Discovered[]; remoteBase: string|null; onSelectServer: (url:string)=>void; onLocalModeChange: (m:'server'|'client')=>void }) {
+function SettingsPanel({ sizes, settings, onRefresh }: { sizes: Size[]; settings: Settings|null; onRefresh: () => void }) {
   const [rotation, setRotation] = useState<number>(settings?.rotationSec ?? 90)
   const [defaultSizeId, setDefaultSizeId] = useState<number | ''>(settings?.defaultSizeId ?? '')
-  const [modeSel, setModeSel] = useState<'server'|'client'>(settings?.mode as any || 'server')
-  const [instanceName, setInstanceName] = useState<string>('')
-  const [selServer, setSelServer] = useState<string>(remoteBase || '')
-  const [manualServer, setManualServer] = useState<string>(remoteBase || '')
   const [saving, setSaving] = useState(false)
-  const [ipInfo, setIpInfo] = useState<{ clientIp: string; serverIps: Array<{ interface: string; address: string; family: string }>; port?: number } | null>(null)
-  useEffect(() => { if (settings) { setRotation(settings.rotationSec); setDefaultSizeId(settings.defaultSizeId ?? ''); const m=((settings as any).mode||'server') as 'server'|'client'; setModeSel(m); const defName = (m==='server'?'punters-server':'punters-client'); setInstanceName(((settings as any).instanceName as string) || defName) } }, [settings])
+  const [ipInfo, setIpInfo] = useState<{ clientIp: string; serverIps: Array<{ interface: string; address: string; family: string }>; port?: number; hostname?: string; mdnsHost?: string } | null>(null)
+  useEffect(() => { if (settings) { setRotation(settings.rotationSec); setDefaultSizeId(settings.defaultSizeId ?? '') } }, [settings])
   useEffect(() => { fetch('/api/ip').then(r=>r.json()).then(setIpInfo).catch(()=>setIpInfo(null)) }, [])
   const originProto = (typeof window !== 'undefined' ? window.location.protocol : 'http:')
   const originPortRaw = (typeof window !== 'undefined' ? window.location.port : '')
@@ -1361,30 +1357,24 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
     setSaving(true)
     const minDelay = new Promise<void>(res=>setTimeout(res,1000))
     await Promise.all([
-      fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ rotationSec: Number(rotation), defaultSizeId: defaultSizeId || null, themeMode: 'dark', defaultDisplayMode: 'all', currency: settings?.currency || 'GBP', locale: settings?.locale || 'en-GB', mode: modeSel, instanceName }) }),
+      fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ rotationSec: Number(rotation), defaultSizeId: defaultSizeId || null, themeMode: 'dark', defaultDisplayMode: 'all', currency: settings?.currency || 'GBP', locale: settings?.locale || 'en-GB' }) }),
       minDelay
     ])
-    if (modeSel==='client') {
-      const url = selServer || manualServer
-      if (url) onSelectServer(url)
-    }
-    onLocalModeChange(modeSel)
     await onRefresh()
     setSaving(false)
   }
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm mb-1">Device Name</label>
-          <input value={instanceName} onChange={e=>setInstanceName(e.target.value)} placeholder={modeSel==='server'?'punters-server':'punters-client'} className="w-72 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
-          <div className="text-xs opacity-70 mt-1">
-            Advertised via Bonjour. Connect with {(originIsHttps?'https':'http')}://{instanceName}.local{originPortLabel}
-          </div>
-        </div>
-        <div>
+        <div className="md:col-start-2">
           <label className="block text-sm mb-1">Current IP Address</label>
           <div className="text-sm">
+            {ipInfo?.hostname ? (
+              <div className="opacity-80">Server hostname: <span className="font-mono">{ipInfo.hostname}</span></div>
+            ) : null}
+            {ipInfo?.mdnsHost ? (
+              <div className="opacity-80">Reachable (mDNS): <span className="font-mono">{ipInfo.mdnsHost}{originPortLabel}</span></div>
+            ) : null}
             <div className="opacity-80">Your browser appears as: <span className="font-mono">{ipInfo?.clientIp || '...'}</span></div>
             {ipInfo?.serverIps?.length ? (
               <div className="mt-1 text-xs opacity-80">
@@ -1414,33 +1404,7 @@ function SettingsPanel({ sizes, settings, onRefresh, localDisplayMode, setLocalD
         </select>
       </div>
 
-      
-
-      <div>
-        <label className="block text-sm mb-1">Mode</label>
-        <select value={modeSel} onChange={e=>{ const v = e.target.value as 'server'|'client'; setModeSel(v); onLocalModeChange(v) }} className="w-60 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
-          <option value="server">Server (Main)</option>
-          <option value="client">Client</option>
-        </select>
-      </div>
-      {modeSel==='client' && (
-        <div className="space-y-2">
-          <div>
-            <label className="block text-sm mb-1">Select Main Server (discovered)</label>
-            <select value={selServer} onChange={e=>setSelServer(e.target.value)} className="w-full md:w-2/3 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
-              <option value="">(none)</option>
-              {servers.map(s => {
-                const url = `http://${s.host}:${s.port}`
-                return <option key={url} value={url}>{s.name} ({s.host}:{s.port})</option>
-              })}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Or enter server URL (http://host:port)</label>
-            <input placeholder="http://192.168.1.10:3000" value={manualServer} onChange={(e)=>setManualServer(e.target.value)} className="w-full md:w-2/3 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
-          </div>
-        </div>
-      )}
+      {/* Removed legacy Server/Client mode and remote server selection */}
       {/* Display content toggles removed from global Settings; moved to per-screen controls in Arrangements */}
       <button onClick={save} disabled={saving} className={`px-3 py-1.5 rounded bg-green-700 inline-flex items-center gap-2 ${saving?'opacity-80 cursor-not-allowed':''}`}>
         {saving && <span className="inline-block h-4 w-4 border-2 border-neutral-300 border-t-transparent rounded-full animate-spin" />}

@@ -30,6 +30,7 @@ export default function ArrangementsPanel() {
   const [openId, setOpenId] = React.useState<string | null>(null)
   const [contentById, setContentById] = React.useState<Record<string, { showBeer: boolean; showDrinks: boolean; showMedia: boolean }>>({})
   const [syncing, setSyncing] = React.useState(false)
+  const [adminUrl, setAdminUrl] = React.useState<string>('')
   const END_ZONE_ID = '__end_zone__'
 
   React.useEffect(() => {
@@ -38,6 +39,23 @@ export default function ArrangementsPanel() {
       try { const r = await fetch('/api/clients/displays'); const d = await r.json(); if (!cancelled) setClients(Array.isArray(d)?d:[]) } catch { if (!cancelled) setClients([]) }
     }
     load(); return () => { cancelled = true }
+  }, [])
+
+  // Compute a reachable Admin URL using server-reported mDNS/hostname
+  React.useEffect(() => {
+    const setup = async () => {
+      try {
+        const info = await fetch('/api/ip').then(r=>r.json()).catch(()=>null as any)
+        const proto = (typeof window !== 'undefined' ? window.location.protocol : 'http:')
+        const isHttps = proto === 'https:'
+        const portRaw = (typeof window !== 'undefined' ? window.location.port : '')
+        const portNum = portRaw ? Number(portRaw) : (isHttps ? 443 : 80)
+        const portLabel = (portNum && portNum !== 80 && portNum !== 443) ? `:${portNum}` : ''
+        const host = (info?.mdnsHost || info?.hostname || (typeof window !== 'undefined' ? window.location.hostname : 'localhost'))
+        setAdminUrl(`${isHttps?'https':'http'}://${host}${portLabel}/admin`)
+      } catch {}
+    }
+    setup()
   }, [])
 
   const sensors = useSensors(
@@ -100,7 +118,7 @@ export default function ArrangementsPanel() {
         <SortableContext items={clients.map(c=>c.id)} strategy={rectSortingStrategy}>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {clients.map(c => (
-              <ScreenTile key={c.id} id={c.id} label={c.n} busy={busyId===c.id} onPing={()=>ping(c.id, c.n)} open={openId===c.id} onToggle={()=>togglePopup(c.id)} content={contentById[c.id] || { showBeer:true, showDrinks:true, showMedia:true }} onUpdate={(patch)=>updateContent(c.id, patch)} />
+              <ScreenTile key={c.id} id={c.id} label={c.n} busy={busyId===c.id} onPing={()=>ping(c.id, c.n)} open={openId===c.id} onToggle={()=>togglePopup(c.id)} content={contentById[c.id] || { showBeer:true, showDrinks:true, showMedia:true }} onUpdate={(patch)=>updateContent(c.id, patch)} adminUrl={adminUrl} />
             ))}
             <EndDropZone id={END_ZONE_ID} />
           </div>
@@ -117,7 +135,7 @@ export default function ArrangementsPanel() {
   )
 }
 
-function ScreenTile({ id, label, busy, onPing, open, onToggle, content, onUpdate }: { id: string; label: number; busy: boolean; onPing: ()=>void; open: boolean; onToggle: ()=>void; content: { showBeer:boolean; showDrinks:boolean; showMedia:boolean }; onUpdate: (p: Partial<{showBeer:boolean; showDrinks:boolean; showMedia:boolean}>)=>void }) {
+function ScreenTile({ id, label, busy, onPing, open, onToggle, content, onUpdate, adminUrl }: { id: string; label: number; busy: boolean; onPing: ()=>void; open: boolean; onToggle: ()=>void; content: { showBeer:boolean; showDrinks:boolean; showMedia:boolean }; onUpdate: (p: Partial<{showBeer:boolean; showDrinks:boolean; showMedia:boolean}>)=>void; adminUrl?: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -131,6 +149,11 @@ function ScreenTile({ id, label, busy, onPing, open, onToggle, content, onUpdate
         <div className="absolute bottom-1 right-1">
           <div role="button" aria-label="Options" onClick={(e)=>{ e.stopPropagation(); onToggle() }} className="px-2 py-0.5 rounded bg-neutral-900/60 text-white text-[10px] cursor-pointer select-none">Options</div>
         </div>
+        {adminUrl ? (
+          <div className="absolute bottom-1 left-1">
+            <a href={adminUrl} target="_blank" rel="noopener noreferrer" onClick={(e)=>e.stopPropagation()} className="px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] cursor-pointer select-none">Open Admin</a>
+          </div>
+        ) : null}
         {open && (
           <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-9 w-40 rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow p-2 text-[12px]" onClick={(e)=>e.stopPropagation()}>
             <div className="font-semibold mb-1 text-xs">Display content</div>
