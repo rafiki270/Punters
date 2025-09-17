@@ -158,6 +158,8 @@ model Asset {
   data      Bytes?
   tags      String?
   requireLogo Boolean @default(false)
+  // If true, always hide logo overlay for this asset (regardless of fullscreen)
+  hideLogo   Boolean @default(false)
   displayOrder Int   @default(0)
   allowPair Boolean  @default(true)
   fullscreen Boolean @default(false)

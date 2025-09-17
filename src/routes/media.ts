@@ -28,12 +28,13 @@ export async function registerMediaRoutes(app: FastifyInstance) {
 
   app.put('/api/assets/:id', { preHandler: requireAdmin }, async (req, reply) => {
     const id = Number((req.params as any).id)
-    const body = (req as any).body as { allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; displayOrder?: number }
+    const body = (req as any).body as { allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; hideLogo?: boolean; displayOrder?: number }
     try {
       const updated = await prisma.asset.update({ where: { id }, data: {
         allowPair: body.allowPair ?? undefined,
         fullscreen: body.fullscreen ?? undefined,
         requireLogo: body.requireLogo ?? undefined,
+        hideLogo: body.hideLogo ?? undefined,
         displayOrder: typeof body.displayOrder === 'number' ? Number(body.displayOrder) : undefined,
       } })
       emitChange('media')

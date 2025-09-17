@@ -83,6 +83,8 @@ export default function ArrangementsPanel() {
   }
 
   const refresh = async () => {
+    // Request all displays to hard-reload (to pick up latest assets), then refresh list
+    try { await fetch('/api/clients/reload', { method:'POST' }) } catch {}
     try {
       const r = await fetch('/api/clients/displays'); const d = await r.json();
       setClients(Array.isArray(d)?d:[])

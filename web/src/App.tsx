@@ -9,7 +9,7 @@ type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: stri
 type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number; volumeMl?: number } }
 type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[]; colorHex?: string|null }
 type TapBeer = { tapNumber: number; status: string; beer: Beer|null }
-type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; displayOrder?: number }
+type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; hideLogo?: boolean; displayOrder?: number }
 type Size = { id: number; name: string; volumeMl: number; displayOrder: number; forBeers?: boolean; forDrinks?: boolean }
 type Discovered = { name: string; host: string; port: number; addresses: string[] }
 type Device = { id:number; name:string; displayMode:'inherit'|'all'|'beer'|'drinks'|'ads'; beerColumns:number; itemsPerColumn:number; cellScale?:number|null; columnGap?:number|null; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right' | null; logoScale?: number|null; bgPosition?: 'center'|'top'|'bottom'|'left'|'right' | null; bgScale?: number|null }
@@ -646,10 +646,17 @@ function Display() {
 
       {/* Optional logo */}
   {(() => {
+        const isAd = cur && (cur.type === 'ad' || cur.type === 'adpair')
         const adObj: Ad | null = (cur && cur.type === 'ad') ? (cur.data as Ad) : null
+        const adPair: Ad[] | null = (cur && cur.type === 'adpair') ? (cur.data as Ad[]) : null
+        const pairHidesLogo = Array.isArray(adPair) ? adPair.some(a => a?.hideLogo === true) : false
         const showLogo = !!logoUrl && (
-          !curIsAd ? true : (
-            curIsFullscreen ? (adObj?.requireLogo === true) : true
+          !isAd ? true : (
+            // For ad pairs, hide if any image requests hide
+            pairHidesLogo ? false : (
+              // For single ads, hide if requested; if fullscreen, only show when explicitly required
+              (adObj?.hideLogo === true) ? false : (curIsFullscreen ? (adObj?.requireLogo === true) : true)
+            )
           )
         )
         return showLogo
@@ -757,8 +764,8 @@ function Display() {
                         <div className="flex items-start justify-between gap-3">
                           {e.drink.logoAssetId ? (
                             <div className="flex items-stretch gap-0 flex-1 min-w-0">
-                              <div className="shrink-0 self-stretch" style={{ width: `${localDrinksIndentPct}%` }}>
-                                <img src={`${contentBase}/api/assets/${e.drink.logoAssetId}/content`} alt={e.drink.name} className="h-full w-full object-contain" />
+                              <div className="shrink-0 self-start" style={{ width: `${localDrinksIndentPct}%` }}>
+                                <img src={`${contentBase}/api/assets/${e.drink.logoAssetId}/content`} alt={e.drink.name} className="block w-full max-h-24 object-contain" />
                               </div>
                               <div className="min-w-0 pl-[18px]">
                                 <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (effDrinksCellScale/50))) }}>{e.drink.name}</div>
