@@ -262,8 +262,17 @@ function Display() {
   }, [beerLocalOverride, beerLocalColumns, device?.beerColumns, settings?.beerColumns])
   const effBeerItemsPerCol = useMemo(() => {
     if (beerLocalOverride) return localBeerItemsPerCol
-    return (device?.itemsPerColumn || localBeerItemsPerCol)
-  }, [beerLocalOverride, device?.itemsPerColumn, localBeerItemsPerCol])
+    // Prefer device override if present
+    if (typeof device?.itemsPerColumn === 'number' && device.itemsPerColumn > 0) return device.itemsPerColumn
+    // Fall back to global itemsPerPage split across columns
+    const ipp = settings?.itemsPerPage
+    const cols = (device?.beerColumns || settings?.beerColumns || 1)
+    if (typeof ipp === 'number' && ipp > 0 && cols > 0) {
+      return Math.max(1, Math.round(ipp / cols))
+    }
+    // Last resort: local preference
+    return localBeerItemsPerCol
+  }, [beerLocalOverride, device?.itemsPerColumn, settings?.itemsPerPage, device?.beerColumns, settings?.beerColumns, localBeerItemsPerCol])
 
   const columns = effBeerColumns
   const itemsPerColumn = effBeerItemsPerCol
@@ -1127,7 +1136,7 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
       showFooter,
       logoPadX: localLogoPadX,
       logoPadY: localLogoPadY,
-      itemsPerPage: localItemsPerPage,
+      // itemsPerPage persisted from beer settings below (unless overridden)
     }
     // Only persist beer cell scale/columns to server when not locally overridden (or when local overrides are hidden)
     const effBeerOverride = showLocalOverrides ? beerOverride : false
@@ -1135,6 +1144,9 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
     if (!effBeerOverride) {
       base.cellScale = localCellScale
       base.beerColumns = localBeerColumns
+      // Persist global itemsPerPage derived from columns x items-per-column
+      const derivedItemsPerPage = Math.max(1, Number(localBeerColumns || 1)) * Math.max(1, Number(localBeerItemsPerCol || 1))
+      base.itemsPerPage = derivedItemsPerPage
     }
     // Persist drinks styles to server when not locally overridden
     if (!effDrinksOverride) {
@@ -1163,7 +1175,7 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => { saveTheme() }, 700)
     return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current) }
-  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localItemsPerPage, localLogoPadX, localLogoPadY, localPageBgColor, bgPresetSel, showFooter, localDrinksCellScale, localDrinksItemsPerCol, localDrinksIndentPct, drinksOverride])
+  }, [theme, localCellScale, localColumnGap, localLogoPosition, localLogoScale, localBgPosition, localBgScale, logoBgEnabled, logoBgColor, logoBgRounded, logoBgRadius, localBgOpacity, localBeerColumns, localBeerItemsPerCol, localItemsPerPage, localLogoPadX, localLogoPadY, localPageBgColor, bgPresetSel, showFooter, localDrinksCellScale, localDrinksItemsPerCol, localDrinksIndentPct, drinksOverride])
 
   const uploadAndSet = async (kind: 'logo'|'background', file: File) => {
     const fd = new FormData(); fd.append('file', file); fd.append('tag', kind==='logo'?'style:logo':'style:background')
@@ -1238,9 +1250,26 @@ function StylePanel({ settings, onRefresh, localDrinksCellScale, setLocalDrinksC
               <input type="number" min={1} max={6} value={localBeerColumns} onChange={e=>{ const n=Math.max(1, Math.min(6, Number(e.target.value)||1)); setLocalBeerColumns(n); if (beerOverride) { try{ localStorage.setItem('beerLocal_columns', String(n)) }catch{}; setBeerLocalColumns(n) } }} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
             </div>
             <div>
-              <label className="block text-sm mb-1">Beer Items per Column (local)</label>
-              <input type="number" min={1} max={50} value={Number.isFinite(localBeerItemsPerCol as any) ? localBeerItemsPerCol : 10} onChange={e=>{ const n=Math.max(1, Math.min(50, Number(e.target.value)||1)); setLocalBeerItemsPerCol(n); try{localStorage.setItem('beerItemsPerCol', String(n))}catch{} }} className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
-              </div>
+              <label className="block text-sm mb-1">Beer Items per Column {beerOverride ? '(local override)' : '(default)'}</label>
+              {(() => {
+                const computedDefault = (() => {
+                  const ipp = (settings as any)?.itemsPerPage
+                  const cols = Math.max(1, Number(localBeerColumns || 1))
+                  return (typeof ipp === 'number' && ipp > 0) ? Math.max(1, Math.round(ipp / cols)) : (Number.isFinite(localBeerItemsPerCol as any) ? localBeerItemsPerCol : 10)
+                })()
+                const value = beerOverride ? localBeerItemsPerCol : computedDefault
+                return (
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={value}
+                    onChange={e=>{ const n=Math.max(1, Math.min(50, Number(e.target.value)||1)); setLocalBeerItemsPerCol(n); try{localStorage.setItem('beerItemsPerCol', String(n))}catch{} }}
+                    className="w-40 px-2 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700"
+                  />
+                )
+              })()}
+            </div>
           </div>
         </div>
         <div className="border border-neutral-300 dark:border-neutral-700 rounded p-3">
