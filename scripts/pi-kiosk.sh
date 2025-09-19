@@ -26,5 +26,11 @@ xset s off
 xset -dpms
 xset s noblank
 
-# Launch Chromium in kiosk mode
-chromium-browser --kiosk http://localhost:3000 --incognito --noerrdialogs --disable-infobars --check-for-update-interval=1
+# Launch Chromium in kiosk mode (enable remote debugging)
+chromium-browser \
+  --kiosk http://localhost:3000 \
+  --incognito \
+  --noerrdialogs \
+  --disable-infobars \
+  --check-for-update-interval=1 \
+  --remote-debugging-port=9222

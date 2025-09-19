@@ -252,6 +252,7 @@ launch_browser() {
     --check-for-update-interval=31536000
     --no-first-run
     --password-store=basic
+    --remote-debugging-port=9222
     --user-data-dir="$HOME/.config/chromium-kiosk"
     --disk-cache-dir="/dev/shm/chromium-cache"
     --restore-last-session
