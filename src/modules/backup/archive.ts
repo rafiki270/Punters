@@ -1,12 +1,5 @@
 import { createHash } from 'node:crypto'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { buildStoreZip, isZipBuffer, parseZip, ZipFile } from './zip'
-
-const execFileAsync = promisify(execFile)
 
 export const BACKUP_FORMAT_VERSION = 1
 
@@ -27,18 +20,12 @@ export type BackupManifest = {
     filename: string
     sizeBytes: number
     sha256: string
-    dump?: {
-      filename: string
-      sizeBytes: number
-      sha256: string
-    }
   }
   assets: {
     directory: string
     files: BackupManifestAsset[]
     totalBytes: number
   }
-  notes?: string[]
 }
 
 export type BackupAssetInput = {
@@ -49,10 +36,8 @@ export type BackupAssetInput = {
 
 export type CreateBackupArchiveArgs = {
   dbBuffer: Buffer
-  sqlDump?: Buffer
   assets: BackupAssetInput[]
   generator?: string
-  notes?: string[]
 }
 
 export type CreateBackupArchiveResult = {
@@ -61,8 +46,7 @@ export type CreateBackupArchiveResult = {
 }
 
 export function createBackupArchive(args: CreateBackupArchiveArgs): CreateBackupArchiveResult {
-  const { dbBuffer, sqlDump, assets, generator, notes } = args
-  const normalizedNotes = Array.isArray(notes) && notes.length ? notes : undefined
+  const { dbBuffer, assets, generator } = args
   const assetEntries = assets.map(asset => {
     const safeName = sanitizeAssetName(asset.filename)
     const entryPath = `images/${asset.id}-${safeName}`
@@ -85,28 +69,16 @@ export function createBackupArchive(args: CreateBackupArchiveArgs): CreateBackup
       filename: 'database.db',
       sizeBytes: dbBuffer.length,
       sha256: hash(dbBuffer),
-      dump: sqlDump
-        ? {
-            filename: 'database.sql',
-            sizeBytes: sqlDump.length,
-            sha256: hash(sqlDump),
-          }
-        : undefined,
     },
     assets: {
       directory: 'images',
       files: manifestAssets,
       totalBytes: manifestAssets.reduce((sum, asset) => sum + asset.sizeBytes, 0),
     },
-    notes: normalizedNotes,
   }
-  if (!manifest.notes) delete manifest.notes
   const files: ZipFile[] = [
     { name: manifest.database.filename, data: dbBuffer },
   ]
-  if (sqlDump) {
-    files.push({ name: manifest.database.dump!.filename, data: sqlDump })
-  }
   for (const asset of assetEntries) {
     files.push(asset.file)
   }
@@ -139,7 +111,7 @@ export function parseBackupArchive(buffer: Buffer): ParsedBackupArchive {
 export type ExtractedDatabase = {
   db: Buffer
   manifest?: BackupManifest
-  source: 'zip-db' | 'zip-sql' | 'db'
+  source: 'zip-db' | 'db'
 }
 
 export async function extractDatabaseFromUpload(buffer: Buffer): Promise<ExtractedDatabase> {
@@ -152,14 +124,7 @@ export async function extractDatabaseFromUpload(buffer: Buffer): Promise<Extract
       verifyHashIfPresent(dbEntry, manifest?.database?.sha256, 'database')
       return { db: dbEntry, manifest, source: 'zip-db' }
     }
-    const dumpFileName = manifest?.database?.dump?.filename || 'database.sql'
-    const sqlEntry = archive.entries.get(dumpFileName)
-    if (sqlEntry) {
-      verifyHashIfPresent(sqlEntry, manifest?.database?.dump?.sha256, 'database.sql dump')
-      const dbFromSql = await sqliteRebuildImpl(sqlEntry)
-      return { db: dbFromSql, manifest, source: 'zip-sql' }
-    }
-    throw new Error('Backup ZIP is missing both database.db and database.sql')
+    throw new Error('Backup ZIP is missing database.db')
   }
   if (!isValidSqliteDb(buffer)) {
     throw new Error('Invalid SQLite database file')
@@ -188,37 +153,10 @@ function verifyHashIfPresent(data: Buffer, expected: string | undefined, label: 
   }
 }
 
-async function rebuildDbFromSql(sql: Buffer) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'punters-restore-'))
-  const sqlPath = path.join(tmpDir, 'backup.sql')
-  const dbPath = path.join(tmpDir, 'backup.db')
-  try {
-    fs.writeFileSync(sqlPath, sql)
-    try {
-      await execFileAsync('sqlite3', [dbPath, '.read', sqlPath], { maxBuffer: 1024 * 1024 * 200 })
-    } catch (err: any) {
-      const detail = err?.code === 'ENOENT'
-        ? 'sqlite3 CLI not found on server side'
-        : err?.message || 'sqlite3 CLI error'
-      throw new Error(`Failed to rebuild database from SQL dump (${detail}). Upload a .db backup instead.`)
-    }
-    return fs.readFileSync(dbPath)
-  } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
-  }
-}
-
 export function isLikelyZip(buffer: Buffer) {
   return isZipBuffer(buffer)
 }
 
 export function isValidSqlite(buffer: Buffer) {
   return isValidSqliteDb(buffer)
-}
-
-type SqliteRebuilder = (sql: Buffer) => Promise<Buffer>
-let sqliteRebuildImpl: SqliteRebuilder = rebuildDbFromSql
-
-export function setBackupSqliteRebuilderForTests(fn: SqliteRebuilder | null) {
-  sqliteRebuildImpl = fn ?? rebuildDbFromSql
 }

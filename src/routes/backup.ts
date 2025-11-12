@@ -3,12 +3,8 @@ import { requireAdmin } from '../auth'
 import path from 'node:path'
 import fs from 'node:fs'
 import { prisma } from '../db'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import pkg from '../../package.json'
 import { createBackupArchive, extractDatabaseFromUpload } from '../modules/backup/archive'
-
-const execFileAsync = promisify(execFile)
 
 const pkgVersion = (pkg as { version?: string })?.version
 const backupGenerator = pkgVersion ? `punters@${pkgVersion}` : undefined
@@ -56,19 +52,11 @@ export async function registerBackupRoutes(app: FastifyInstance) {
     return reply.send(fs.createReadStream(dbPath))
   })
 
-  // Download a ZIP containing an SQL dump plus all image assets
+  // Download a ZIP containing the SQLite database plus all image assets
   app.get('/api/admin/backup/zip', { preHandler: requireAdmin }, async (_req, reply) => {
     const { path: dbPath, tried } = await resolveDbPath()
     if (!dbPath) return reply.code(404).send({ error: 'Database file not found', tried })
-    const notes: string[] = []
     const dbBuffer = fs.readFileSync(dbPath)
-    let sqlDump: Buffer | undefined
-    try {
-      const { stdout } = await execFileAsync('sqlite3', [dbPath, '.dump'], { maxBuffer: 1024 * 1024 * 200 })
-      sqlDump = Buffer.from(stdout, 'utf8')
-    } catch {
-      notes.push('sqlite3 CLI not available when this backup was created; database.sql omitted.')
-    }
     const assets = await prisma.asset.findMany({ select: { id: true, filename: true, data: true } })
     const assetInputs = assets
       .filter(a => a.data)
@@ -79,10 +67,8 @@ export async function registerBackupRoutes(app: FastifyInstance) {
       }))
     const { zip } = createBackupArchive({
       dbBuffer,
-      sqlDump,
       assets: assetInputs,
       generator: backupGenerator,
-      notes: notes.length ? notes : undefined,
     })
     const ts = new Date()
     const pad = (n: number) => n.toString().padStart(2, '0')

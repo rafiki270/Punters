@@ -152,7 +152,7 @@ export default function SystemPanel() {
       </div>
       <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
         <div className="font-semibold mb-2">Restore Backup</div>
-        <div className="opacity-80 mb-2">Upload a previously downloaded .zip (preferred) or .db file to restore. This will overwrite current data.</div>
+        <div className="opacity-80 mb-2">Upload a backup archive. This will overwrite current data.</div>
         <input type="file" accept=".zip,.db,application/octet-stream,application/zip" onChange={e=>setFile(e.target.files?.[0] || null)} className="mb-2" />
         <LoadingButton onClick={restoreDb} className={`px-3 py-1.5 rounded bg-red-700 text-white ${busy?'opacity-80 cursor-not-allowed':''}`}>Restore Database</LoadingButton>
       </div>
