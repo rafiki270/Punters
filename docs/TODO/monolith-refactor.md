@@ -49,5 +49,5 @@
 
 ## Execution Notes
 - After each module extraction, delete the legacy file under `src/routes` only when its replacement is wired in and tested.
-- Document interface contracts (DTOs, events) in `docs/api.md` as they stabilize.
+- Document interface contracts (DTOs, events) in `Docs/api.md` as they stabilize.
 - Keep ticket tracking in this file: append date + author when marking a slice done, along with any follow-ups discovered.
