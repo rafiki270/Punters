@@ -573,6 +573,17 @@ function Display() {
     setPaused(true)
   }, [paused, curIdx, remainingSecs])
 
+  const handleNextPage = useCallback(() => {
+    if (paused) {
+      if (!slidesLen) return
+      const current = curIdx != null ? curIdx : 0
+      const nextIdx = (current + 1) % slidesLen
+      setPauseSnapshot((prev) => ({ idx: nextIdx, secsLeft: prev?.secsLeft ?? remainingSecs }))
+      return
+    }
+    try { socketRef.current?.emit('next_page') } catch {}
+  }, [paused, slidesLen, curIdx, remainingSecs])
+
   // Measure logo to add top padding when logo is at top
   const logoRef = useRef<HTMLDivElement | null>(null)
   const [logoBoxH, setLogoBoxH] = useState<number>(0)
@@ -618,7 +629,7 @@ function Display() {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
           )}
         </button>
-        <button onClick={()=>{ try { socketRef.current?.emit('next_page') } catch {} }} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" aria-label="Next Page">
+        <button onClick={handleNextPage} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" aria-label="Next Page">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M7 6h2v12H7zM11 6l8 6-8 6z"/></svg>
         </button>
         <button onClick={toggleFullscreen} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
