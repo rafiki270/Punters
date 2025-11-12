@@ -18,7 +18,7 @@
   - Create `src/core`, `src/modules`, and `src/lib` folders with placeholder exports.
   - Move `db.ts`, `auth.ts`, and `events.ts` into `src/core`/`src/lib` with re-exports to avoid breaking imports.
   - Outcome: folder structure exists, old imports keep working via barrel files.
-- [ ] **2. HTTP + config foundation**
+- [x] **2. HTTP + config foundation** _(2025-11-12 Codex)_
   - Introduce `src/core/http.ts` with helpers for route registration (Zod parsing, error replies) and `src/core/config.ts` for env defaults.
   - Update `src/server.ts` to delegate plugin registration to a new `buildApp()` function in `src/app.ts`.
 - [ ] **3. Settings module extraction**
