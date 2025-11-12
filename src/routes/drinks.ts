@@ -1,182 +1,89 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../db'
 import { z } from 'zod'
 import { requireAdmin } from '../auth'
 import { emitChange } from '../events'
-
-const DrinkCategoryCreate = z.object({ name: z.string().min(1), displayOrder: z.number().int().optional() })
-const DrinkCategoryUpdate = z.object({ name: z.string().min(1).optional(), active: z.boolean().optional(), displayOrder: z.number().int().optional() })
-
-const DrinkCreate = z.object({
-  name: z.string().min(1),
-  categoryId: z.number().int().optional(),
-  categoryName: z.string().min(1).optional(),
-  producer: z.string().optional(),
-  style: z.string().optional(),
-  abv: z.number().optional(),
-  origin: z.string().optional(),
-  description: z.string().optional(),
-  active: z.boolean().optional(),
-  logoAssetId: z.number().int().nullable().optional(),
-})
-
-const DrinkUpdate = DrinkCreate.partial()
-
-const DrinkPriceUpsert = z.object({ prices: z.array(z.object({ serveSizeId: z.number().int(), amountMinor: z.number().int().nonnegative(), currency: z.string() })) })
+import { prisma } from '../db'
+import {
+  DrinkCategoryCreateSchema,
+  DrinkCategoryUpdateSchema,
+  DrinkCreateSchema,
+  DrinkPriceUpsertSchema,
+  DrinkUpdateSchema,
+  createDrinksService,
+} from '../modules/inventory/drinks'
+import { parseQuery, route } from '../core/http'
 
 export async function registerDrinkRoutes(app: FastifyInstance) {
-  // Categories
-  app.get('/api/drink-categories', async () => {
-    return prisma.drinkCategory.findMany({ where: { active: true }, orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }] })
-  })
+  const drinks = createDrinksService({ prisma, emitChange })
 
-  app.post('/api/drink-categories', { preHandler: requireAdmin }, async (req, reply) => {
-    const data = DrinkCategoryCreate.parse((req as any).body)
-    try {
-      const created = await prisma.drinkCategory.create({ data: { name: data.name, displayOrder: data.displayOrder ?? 0 } })
-      emitChange('drinks')
-      return created
-    } catch (e) {
-      return reply.code(400).send({ error: 'Category may already exist' })
-    }
-  })
+  app.get('/api/drink-categories', route(async () => drinks.listCategories()))
 
-  app.put('/api/drink-categories/:id', { preHandler: requireAdmin }, async (req, reply) => {
+  app.post('/api/drink-categories', { preHandler: requireAdmin }, route(async (req) => {
+    const data = DrinkCategoryCreateSchema.parse((req as any).body ?? {})
+    return drinks.createCategory(data)
+  }))
+
+  app.put('/api/drink-categories/:id', { preHandler: requireAdmin }, route(async (req) => {
     const id = Number((req.params as any).id)
-    const data = DrinkCategoryUpdate.parse((req as any).body)
-    try {
-      const updated = await prisma.drinkCategory.update({ where: { id }, data })
-      emitChange('drinks')
-      return updated
-    } catch (e) {
-      return reply.code(404).send({ error: 'Not found' })
-    }
-  })
+    const data = DrinkCategoryUpdateSchema.parse((req as any).body ?? {})
+    return drinks.updateCategory(id, data)
+  }))
 
-  // Reorder categories by IDs array
-  app.put('/api/drink-categories/order', { preHandler: requireAdmin }, async (req, reply) => {
-    const body = (req as any).body as { ids?: number[] }
-    const ids = Array.isArray(body?.ids) ? body!.ids!.map(Number).filter(Number.isFinite) : []
-    if (!ids.length) return reply.code(400).send({ error: 'ids array required' })
-    // Write displayOrder = index+1
-    let i = 1
-    for (const id of ids) {
-      await prisma.drinkCategory.update({ where: { id }, data: { displayOrder: i++ } }).catch(()=>{})
-    }
-    emitChange('drinks')
-    return { ok: true }
-  })
+  const OrderSchema = z.object({ ids: z.array(z.number().int()).optional() })
+  app.put('/api/drink-categories/order', { preHandler: requireAdmin }, route(async (req) => {
+    const body = OrderSchema.parse((req as any).body ?? {})
+    const ids = (body.ids || []).filter((id) => Number.isFinite(id))
+    return drinks.reorderCategories(ids)
+  }))
 
-  // Delete category if empty
-  app.delete('/api/drink-categories/:id', { preHandler: requireAdmin }, async (req, reply) => {
+  app.delete('/api/drink-categories/:id', { preHandler: requireAdmin }, route(async (req) => {
     const id = Number((req.params as any).id)
-    const count = await prisma.drink.count({ where: { categoryId: id } })
-    if (count > 0) return reply.code(400).send({ error: 'Category not empty' })
-    try {
-      await prisma.drinkCategory.delete({ where: { id } })
-      emitChange('drinks')
-      return { ok: true }
-    } catch {
-      return reply.code(404).send({ error: 'Not found' })
-    }
-  })
+    return drinks.deleteCategory(id)
+  }))
 
-  // Drinks
-  app.get('/api/drinks', async (req) => {
-    const q = (req as any).query || {}
-    const where: any = {}
-    if (q.active != null) where.active = q.active === 'true'
-    if (q.categoryId != null) where.categoryId = Number(q.categoryId)
-    const withPrices = String(q.withPrices || '').toLowerCase() === 'true'
-    return prisma.drink.findMany({
-      where,
-      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
-      include: withPrices ? { prices: { include: { size: true } } } : undefined as any,
+  const DrinksQuery = z.object({
+    active: z.string().optional(),
+    categoryId: z.string().optional(),
+    withPrices: z.string().optional(),
+  })
+  app.get('/api/drinks', route(async (req) => {
+    const q = parseQuery(req, DrinksQuery)
+    return drinks.listDrinks({
+      active: q.active ? q.active === 'true' : undefined,
+      categoryId: q.categoryId ? Number(q.categoryId) : undefined,
+      withPrices: q.withPrices === 'true',
     })
-  })
+  }))
 
-  app.get('/api/drinks/:id', async (req, reply) => {
+  app.get('/api/drinks/:id', route(async (req) => {
     const id = Number((req.params as any).id)
-    const drink = await prisma.drink.findUnique({ where: { id }, include: { prices: true } })
-    if (!drink) return reply.code(404).send({ error: 'Not found' })
-    return drink
-  })
+    return drinks.getDrink(id)
+  }))
 
-  app.post('/api/drinks', { preHandler: requireAdmin }, async (req, reply) => {
-    const data = DrinkCreate.parse((req as any).body)
-    // Resolve category
-    let categoryId = data.categoryId ?? null
-    if (!categoryId) {
-      const name = (data.categoryName || '').trim()
-      if (!name) return reply.code(400).send({ error: 'categoryId or categoryName is required' })
-      const existing = await prisma.drinkCategory.findFirst({ where: { name } })
-      if (existing) categoryId = existing.id
-      else {
-        const created = await prisma.drinkCategory.create({ data: { name } })
-        categoryId = created.id
-      }
-    }
-    const created = await prisma.drink.create({ data: { name: data.name, categoryId: categoryId as number, producer: data.producer, style: data.style, abv: data.abv, origin: data.origin, description: data.description, active: data.active ?? true, logoAssetId: (data as any).logoAssetId ?? null } })
-    emitChange('drinks')
-    return created
-  })
+  app.post('/api/drinks', { preHandler: requireAdmin }, route(async (req) => {
+    const data = DrinkCreateSchema.parse((req as any).body ?? {})
+    return drinks.createDrink(data)
+  }))
 
-  app.put('/api/drinks/:id', { preHandler: requireAdmin }, async (req, reply) => {
+  app.put('/api/drinks/:id', { preHandler: requireAdmin }, route(async (req) => {
     const id = Number((req.params as any).id)
-    const data = DrinkUpdate.parse((req as any).body)
-    const { categoryName, categoryId, ...rest } = (data as any)
-    let resolvedCategoryId: number | undefined = categoryId
-    if (!resolvedCategoryId && categoryName) {
-      const name = String(categoryName || '').trim()
-      if (name) {
-        const existing = await prisma.drinkCategory.findFirst({ where: { name } })
-        resolvedCategoryId = existing ? existing.id : (await prisma.drinkCategory.create({ data: { name } })).id
-      }
-    }
-    try {
-      const updated = await prisma.drink.update({ where: { id }, data: { ...rest, ...(resolvedCategoryId ? { categoryId: resolvedCategoryId } : {}) } })
-      emitChange('drinks')
-      return updated
-    } catch (e) {
-      return reply.code(404).send({ error: 'Not found' })
-    }
-  })
+    const data = DrinkUpdateSchema.parse((req as any).body ?? {})
+    return drinks.updateDrink(id, data)
+  }))
 
-  app.delete('/api/drinks/:id', { preHandler: requireAdmin }, async (req, reply) => {
+  app.delete('/api/drinks/:id', { preHandler: requireAdmin }, route(async (req) => {
     const id = Number((req.params as any).id)
-    try {
-      await prisma.drink.update({ where: { id }, data: { active: false } })
-      emitChange('drinks')
-      return { ok: true }
-    } catch {
-      return reply.code(404).send({ error: 'Not found' })
-    }
-  })
+    return drinks.softDeleteDrink(id)
+  }))
 
-  // Prices for a drink
-  app.get('/api/drinks/:id/prices', async (req, reply) => {
+  app.get('/api/drinks/:id/prices', route(async (req) => {
     const id = Number((req.params as any).id)
-    const drink = await prisma.drink.findUnique({ where: { id } })
-    if (!drink) return reply.code(404).send({ error: 'Not found' })
-    const prices = await prisma.drinkPrice.findMany({ where: { drinkId: id }, include: { size: true } })
-    return prices
-  })
+    return drinks.listPrices(id)
+  }))
 
-  app.put('/api/drinks/:id/prices', { preHandler: requireAdmin }, async (req, reply) => {
+  app.put('/api/drinks/:id/prices', { preHandler: requireAdmin }, route(async (req) => {
     const id = Number((req.params as any).id)
-    const drink = await prisma.drink.findUnique({ where: { id } })
-    if (!drink) return reply.code(404).send({ error: 'Not found' })
-    const { prices } = DrinkPriceUpsert.parse((req as any).body)
-    await Promise.all(
-      prices.map((p: any) =>
-        prisma.drinkPrice.upsert({
-          where: { drinkId_serveSizeId: { drinkId: id, serveSizeId: p.serveSizeId } },
-          update: { amountMinor: p.amountMinor, currency: p.currency },
-          create: { drinkId: id, serveSizeId: p.serveSizeId, amountMinor: p.amountMinor, currency: p.currency }
-        })
-      )
-    )
-    emitChange('drinks')
-    return { ok: true }
-  })
+    const payload = DrinkPriceUpsertSchema.parse((req as any).body ?? {})
+    return drinks.upsertPrices(id, payload)
+  }))
 }

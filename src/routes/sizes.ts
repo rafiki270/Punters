@@ -1,41 +1,36 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../db'
-import { z } from 'zod'
 import { requireAdmin } from '../auth'
 import { emitChange } from '../events'
-
-const SizeCreate = z.object({ name: z.string().min(1), volumeMl: z.number().int().positive(), displayOrder: z.number().int().optional(), forBeers: z.boolean().optional(), forDrinks: z.boolean().optional() })
-const SizeUpdate = z.object({ name: z.string().min(1).optional(), volumeMl: z.number().int().positive().optional(), displayOrder: z.number().int().optional(), forBeers: z.boolean().optional(), forDrinks: z.boolean().optional() })
+import { prisma } from '../db'
+import { SizeCreateSchema, SizeUpdateSchema } from '../modules/catalog/schema'
+import { createCatalogRepo } from '../modules/catalog/repo'
+import { createCatalogService, SizeInUseError } from '../modules/catalog/service'
+import { httpError, route } from '../core/http'
 
 export async function registerSizeRoutes(app: FastifyInstance) {
-  app.get('/api/sizes', async () => prisma.serveSize.findMany({ orderBy: { displayOrder: 'asc' } }))
+  const catalog = createCatalogService({ repo: createCatalogRepo(prisma), emitChange })
 
-  app.post('/api/sizes', { preHandler: requireAdmin }, async (req) => {
-    const data = SizeCreate.parse((req as any).body)
-    const created = await prisma.serveSize.create({ data: { ...data, forBeers: data.forBeers ?? true, forDrinks: data.forDrinks ?? true } })
-    emitChange('sizes')
-    return created
-  })
+  app.get('/api/sizes', route(async () => catalog.listSizes()))
 
-  app.put('/api/sizes/:id', { preHandler: requireAdmin }, async (req) => {
+  app.post('/api/sizes', { preHandler: requireAdmin }, route(async (req) => {
+    const data = SizeCreateSchema.parse((req as any).body ?? {})
+    return catalog.createSize(data)
+  }))
+
+  app.put('/api/sizes/:id', { preHandler: requireAdmin }, route(async (req) => {
     const id = Number((req.params as any).id)
-    const data = SizeUpdate.parse((req as any).body)
-    const updated = await prisma.serveSize.update({ where: { id }, data })
-    emitChange('sizes')
-    return updated
-  })
+    const data = SizeUpdateSchema.parse((req as any).body ?? {})
+    return catalog.updateSize(id, data)
+  }))
 
-  app.delete('/api/sizes/:id', { preHandler: requireAdmin }, async (req, reply) => {
+  app.delete('/api/sizes/:id', { preHandler: requireAdmin }, route(async (req) => {
     const id = Number((req.params as any).id)
-    const beerPriceCount = await prisma.price.count({ where: { serveSizeId: id } })
-    const drinkPriceCount = await prisma.drinkPrice.count({ where: { serveSizeId: id } }).catch(()=>0)
-    const total = beerPriceCount + (drinkPriceCount || 0)
-    if (total > 0) {
-      reply.code(400)
-      return { error: 'Cannot delete size with existing prices' }
+    try {
+      await catalog.deleteSize(id)
+      return { ok: true }
+    } catch (err) {
+      if (err instanceof SizeInUseError) throw httpError(400, err.message)
+      throw err
     }
-    await prisma.serveSize.delete({ where: { id } })
-    emitChange('sizes')
-    return { ok: true }
-  })
+  }))
 }

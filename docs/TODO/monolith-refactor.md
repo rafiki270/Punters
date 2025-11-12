@@ -21,17 +21,17 @@
 - [x] **2. HTTP + config foundation** _(2025-11-12 Codex)_
   - Introduce `src/core/http.ts` with helpers for route registration (Zod parsing, error replies) and `src/core/config.ts` for env defaults.
   - Update `src/server.ts` to delegate plugin registration to a new `buildApp()` function in `src/app.ts`.
-- [ ] **3. Settings module extraction**
+- [x] **3. Settings module extraction** _(2025-11-12 Codex)_
   - Create `src/modules/settings/{schema,repo,service,routes}.ts`.
   - Move all `/api/settings` logic out of `src/routes/settings.ts`, keeping the Fastify handler under 300 lines by splitting service/business logic.
   - Add targeted unit tests for the service (pricing, rotation defaults) in `tests/settings.service.test.ts`.
-- [ ] **4. Sizes + pricing module**
+- [x] **4. Sizes + pricing module** _(2025-11-12 Codex)_
   - Carve the size/default price logic into `src/modules/catalog` with DTOs shared by beers/taps.
   - Ensure beer creation uses the new service; remove duplicated Prisma calls from `src/routes/beers.ts`.
-- [ ] **5. Inventory module (beers, taps, drinks)**
+- [x] **5. Inventory module (beers, taps, drinks)** _(2025-11-12 Codex)_
   - Define shared types (`BeerDTO`, `TapDTO`) and move business logic (badge cleanup, price upserts) into services.
   - Expose thin routers that call into the services; emit change events through `src/lib/events` only.
-- [ ] **6. Media & assets module**
+- [x] **6. Media & assets module** _(2025-11-12 Codex)_
   - Extract upload/asset persistence to its own service; clarify lifecycle hooks (auto-delete unused assets).
   - Prepare hook points for CDN/local storage switching later.
 - [ ] **7. Devices + display preferences module**

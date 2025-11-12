@@ -7,6 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build:server": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
+    "test": "ts-node --transpile-only tests/settings.service.test.ts && ts-node --transpile-only tests/catalog.service.test.ts && ts-node --transpile-only tests/inventory.beers.test.ts && ts-node --transpile-only tests/inventory.drinks.test.ts && ts-node --transpile-only tests/media.service.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "db:seed": "ts-node prisma/seed.ts",

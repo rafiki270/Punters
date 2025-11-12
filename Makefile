@@ -7,7 +7,8 @@ HOST_PORT ?= 80
   launch launch80 launch-client update \
   pi-setup pi-launch pi-launch-client \
   pi-force-autologin \
-  check-api docker-toggle docker-publish-latest docker-release
+  check-api docker-toggle docker-publish-latest docker-release \
+  test
 
 .DEFAULT_GOAL := help
 
@@ -36,6 +37,9 @@ dev-web: ## Run web dev server on port 5173
 
 build: ## Build web and server
 	npm run build
+
+test: ## Run backend unit tests
+	npm test
 
 start: ## Start built server (serves built web)
 	npm start
