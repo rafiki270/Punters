@@ -75,6 +75,7 @@ function Display() {
   const [pageIdx, setPageIdx] = useState(0)
   const [secs, setSecs] = useState(0)
   const [paused, setPaused] = useState(false)
+  const [pauseSnapshot, setPauseSnapshot] = useState<{ idx: number|null; secsLeft: number } | null>(null)
   const [adminOpen, setAdminOpen] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
   const controlsVisible = useAutoHide(10000)
@@ -495,7 +496,11 @@ function Display() {
   const effSecs = syncEnabled ? (rotation - Math.floor((baseSeconds) % Math.max(1, rotation))) : secs
   let cur: any | null = null
   let curIdx: number | null = null
-  if (slidesLen > 0) {
+  if (paused && pauseSnapshot && pauseSnapshot.idx != null && slidesLen > 0) {
+    const frozenIdx = ((pauseSnapshot.idx % slidesLen) + slidesLen) % slidesLen
+    cur = slides[frozenIdx]
+    curIdx = frozenIdx
+  } else if (slidesLen > 0) {
     // Determine effective content mode for this screen
     let modeEff: 'all'|'beer'|'drinks'|'ads' = 'all'
     if (device && device.displayMode !== 'inherit') modeEff = device.displayMode
@@ -555,6 +560,19 @@ function Display() {
     } : {}),
   }
 
+  const remainingSecs = paused && pauseSnapshot ? pauseSnapshot.secsLeft : effSecs
+
+  const handlePauseToggle = useCallback(() => {
+    if (paused) {
+      setPaused(false)
+      setPauseSnapshot(null)
+      return
+    }
+    const snapshotIdx = curIdx != null ? curIdx : null
+    setPauseSnapshot({ idx: snapshotIdx, secsLeft: remainingSecs })
+    setPaused(true)
+  }, [paused, curIdx, remainingSecs])
+
   // Measure logo to add top padding when logo is at top
   const logoRef = useRef<HTMLDivElement | null>(null)
   const [logoBoxH, setLogoBoxH] = useState<number>(0)
@@ -591,7 +609,7 @@ function Display() {
       )}
       {/* Floating controls (auto-hide) */}
       <div className={`fixed top-3 right-3 z-50 transition-opacity ${controlsVisible ? 'opacity-100' : 'opacity-0'} pointer-events-auto flex items-center gap-2`}>
-        <button onClick={()=>setPaused(p=>!p)} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
+        <button onClick={handlePauseToggle} className="px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
           {paused ? (
             // Play icon
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M8 5v14l11-7z"/></svg>
@@ -849,7 +867,9 @@ function Display() {
           <div className="px-7 py-2 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
             {slides.length > 1 && (curIdx != null) && (
               <div className="flex items-center gap-3">
-                <span>Page { (curIdx + 1) } of { slides.length } • changes in {effSecs} seconds</span>
+                <span>
+                  Page { (curIdx + 1) } of { slides.length } • {paused ? 'rotation paused' : `changes in ${remainingSecs} seconds`}
+                </span>
               </div>
             )}
             <div className="text-[10px] leading-tight opacity-80">© Not That California R&D</div>

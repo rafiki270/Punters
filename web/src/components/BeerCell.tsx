@@ -76,7 +76,7 @@ export function BeerCell({
       </div>
       {isKicked && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-          <div className="text-red-600 font-extrabold uppercase rounded-2xl border-4 border-red-600" style={{ transform: 'rotate(-12deg)', padding: `${Math.max(6, Math.round(6 * factor))}px ${Math.max(10, Math.round(14 * factor))}px` }}>KICKED</div>
+          <div className="text-red-600 font-extrabold uppercase rounded-2xl border-4 border-red-600" style={{ transform: 'rotate(-12deg)', padding: `${Math.max(6, Math.round(6 * factor))}px ${Math.max(10, Math.round(14 * factor))}px` }}>BEER GONE</div>
         </div>
       )}
     </div>
@@ -84,4 +84,3 @@ export function BeerCell({
 }
 
 export default BeerCell
-
