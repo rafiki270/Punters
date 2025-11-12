@@ -20,7 +20,7 @@ const CRC_TABLE = (() => {
     table[n] = c >>> 0
   }
   return table
-)()
+})()
 
 function writeUInt16LE(n: number) {
   const b = Buffer.allocUnsafe(2)

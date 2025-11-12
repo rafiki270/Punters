@@ -88,7 +88,7 @@ export default function SystemPanel() {
   }
 
   async function restoreDb() {
-    if (!file) { alert('Choose a .db file first'); return }
+    if (!file) { alert('Choose a backup file (.zip or .db) first'); return }
     if (!confirm('Restore database from selected file? This will overwrite current data.')) return
     setBusy(true)
     try {
@@ -96,13 +96,24 @@ export default function SystemPanel() {
       fd.append('file', file)
       const res = await fetch('/api/admin/restore/db', { method: 'POST', body: fd, credentials: 'include' })
       if (!res.ok) {
-        const msg = await res.text().catch(()=> '')
+        let msg = ''
+        const ct = res.headers.get('content-type') || ''
+        if (ct.includes('application/json')) {
+          try {
+            const body = await res.json()
+            msg = body?.error || body?.message || ''
+          } catch {}
+        }
+        if (!msg) {
+          try { msg = await res.text() } catch {}
+        }
         throw new Error(msg || 'Restore failed')
       }
       alert('Restore completed. The app will reload to apply changes.')
       window.location.reload()
     } catch (e) {
-      alert('Failed to restore backup')
+      const msg = e instanceof Error ? e.message : String(e)
+      alert(`Failed to restore backup: ${msg}`)
     } finally {
       setBusy(false)
     }
@@ -136,13 +147,13 @@ export default function SystemPanel() {
       </div>
       <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
         <div className="font-semibold mb-2">Download Backup</div>
-        <div className="opacity-80 mb-2">Export the entire database (SQLite) as a .db file.</div>
-        <LoadingButton onClick={downloadDb} className="px-3 py-1.5 rounded bg-blue-600 text-white">Download Database</LoadingButton>
+        <div className="opacity-80 mb-2">Export a .zip that contains the SQLite database plus all referenced media files.</div>
+        <LoadingButton onClick={downloadDb} className="px-3 py-1.5 rounded bg-blue-600 text-white">Download Backup ZIP</LoadingButton>
       </div>
       <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
         <div className="font-semibold mb-2">Restore Backup</div>
-        <div className="opacity-80 mb-2">Upload a previously downloaded .db file to restore. This will overwrite current data.</div>
-        <input type="file" accept=".db,application/octet-stream" onChange={e=>setFile(e.target.files?.[0] || null)} className="mb-2" />
+        <div className="opacity-80 mb-2">Upload a previously downloaded .zip (preferred) or .db file to restore. This will overwrite current data.</div>
+        <input type="file" accept=".zip,.db,application/octet-stream,application/zip" onChange={e=>setFile(e.target.files?.[0] || null)} className="mb-2" />
         <LoadingButton onClick={restoreDb} className={`px-3 py-1.5 rounded bg-red-700 text-white ${busy?'opacity-80 cursor-not-allowed':''}`}>Restore Database</LoadingButton>
       </div>
     </div>

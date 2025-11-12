@@ -156,7 +156,7 @@ export async function extractDatabaseFromUpload(buffer: Buffer): Promise<Extract
     const sqlEntry = archive.entries.get(dumpFileName)
     if (sqlEntry) {
       verifyHashIfPresent(sqlEntry, manifest?.database?.dump?.sha256, 'database.sql dump')
-      const dbFromSql = await rebuildDbFromSql(sqlEntry)
+      const dbFromSql = await sqliteRebuildImpl(sqlEntry)
       return { db: dbFromSql, manifest, source: 'zip-sql' }
     }
     throw new Error('Backup ZIP is missing both database.db and database.sql')
@@ -192,16 +192,16 @@ async function rebuildDbFromSql(sql: Buffer) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'punters-restore-'))
   const sqlPath = path.join(tmpDir, 'backup.sql')
   const dbPath = path.join(tmpDir, 'backup.db')
-  fs.writeFileSync(sqlPath, sql)
   try {
-    await execFileAsync('sqlite3', [dbPath, '.read', sqlPath], { maxBuffer: 1024 * 1024 * 200 })
-  } catch (err: any) {
-    const detail = err?.code === 'ENOENT'
-      ? 'sqlite3 CLI not found on server side'
-      : err?.message || 'sqlite3 CLI error'
-    throw new Error(`Failed to rebuild database from SQL dump (${detail}). Upload a .db backup instead.`)
-  }
-  try {
+    fs.writeFileSync(sqlPath, sql)
+    try {
+      await execFileAsync('sqlite3', [dbPath, '.read', sqlPath], { maxBuffer: 1024 * 1024 * 200 })
+    } catch (err: any) {
+      const detail = err?.code === 'ENOENT'
+        ? 'sqlite3 CLI not found on server side'
+        : err?.message || 'sqlite3 CLI error'
+      throw new Error(`Failed to rebuild database from SQL dump (${detail}). Upload a .db backup instead.`)
+    }
     return fs.readFileSync(dbPath)
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
@@ -214,4 +214,11 @@ export function isLikelyZip(buffer: Buffer) {
 
 export function isValidSqlite(buffer: Buffer) {
   return isValidSqliteDb(buffer)
+}
+
+type SqliteRebuilder = (sql: Buffer) => Promise<Buffer>
+let sqliteRebuildImpl: SqliteRebuilder = rebuildDbFromSql
+
+export function setBackupSqliteRebuilderForTests(fn: SqliteRebuilder | null) {
+  sqliteRebuildImpl = fn ?? rebuildDbFromSql
 }
