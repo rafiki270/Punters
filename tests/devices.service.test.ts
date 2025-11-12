@@ -1,17 +1,8 @@
+import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createDeviceService } from '../src/modules/devices/service'
 
-async function run(name: string, fn: () => Promise<void>) {
-  try {
-    await fn()
-    console.log(`✔ ${name}`)
-  } catch (err) {
-    console.error(`✖ ${name}`)
-    throw err
-  }
-}
-
-run('create device emits change', async () => {
+test('create device emits change', async () => {
   const prisma: any = {
     device: {
       create: async ({ data }: any) => ({ id: 1, ...data }),

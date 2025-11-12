@@ -62,6 +62,13 @@ Local-first web app to power taproom TVs with live beer lists and scheduled prom
 - Docker (one-command install)
   - `docker compose up --build`
 
+## Testing
+- Unit suite (services + modules): `npm run test:unit`
+  - Compiles the TypeScript tests into `dist-tests/` and runs them via Node's built-in test runner.
+- Browser smoke (optional): `npm run test:smoke`
+  - Requires `@playwright/test` and a running display host (e.g., `npm --prefix web run preview`).
+  - Skips automatically when Playwright is not installed (useful for offline/dev environments).
+
 ## Server Details
 - Port: `3000` (configurable via `PORT` environment variable)
 - Health: `GET /api/health`

@@ -1,3 +1,4 @@
+import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createBeersService } from '../src/modules/inventory/beers'
 import { PrismaClient } from '@prisma/client'
@@ -15,17 +16,7 @@ function createService(prismaOverrides: MockPrisma, prefillSpy: () => Promise<vo
   return { service, changes }
 }
 
-async function run(name: string, fn: () => Promise<void>) {
-  try {
-    await fn()
-    console.log(`✔ ${name}`)
-  } catch (err) {
-    console.error(`✖ ${name}`)
-    throw err
-  }
-}
-
-run('create beer triggers prefill and emits change', async () => {
+test('create beer triggers prefill and emits change', async () => {
   let prefills = 0
   const prisma = {
     beer: {
@@ -41,7 +32,7 @@ run('create beer triggers prefill and emits change', async () => {
   assert.deepEqual(changes, ['beers'])
 })
 
-run('update clears unused badge assets', async () => {
+test('update clears unused badge assets', async () => {
   let deleted = false
   const prisma = {
     beer: {

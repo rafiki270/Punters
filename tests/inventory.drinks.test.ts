@@ -1,18 +1,9 @@
+import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createDrinksService } from '../src/modules/inventory/drinks'
 import { PrismaClient } from '@prisma/client'
 
-async function run(name: string, fn: () => Promise<void>) {
-  try {
-    await fn()
-    console.log(`✔ ${name}`)
-  } catch (err) {
-    console.error(`✖ ${name}`)
-    throw err
-  }
-}
-
-run('createDrink creates category when only name is provided', async () => {
+test('createDrink creates category when only name is provided', async () => {
   let createdCategory = false
   const prisma = {
     drinkCategory: {

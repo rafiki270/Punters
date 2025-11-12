@@ -1,17 +1,8 @@
+import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createMediaService } from '../src/modules/media/service'
 
-async function run(name: string, fn: () => Promise<void>) {
-  try {
-    await fn()
-    console.log(`✔ ${name}`)
-  } catch (err) {
-    console.error(`✖ ${name}`)
-    throw err
-  }
-}
-
-run('deleteAsset blocks when asset in use', async () => {
+test('deleteAsset blocks when asset in use', async () => {
   const prisma: any = {
     beer: { count: async () => 1 },
     drink: { count: async () => 0 },

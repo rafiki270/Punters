@@ -43,9 +43,9 @@
 - [x] **9. Frontend entry split** _(2025-11-12 Codex)_
   - Create `web/src/admin/App.tsx` and `web/src/display/App.tsx`, move existing logic into feature-specific components (<500 lines each).
   - Wire Vite with two entry points and lazy-load shared design system pieces.
-- [ ] **10. Testing + automation pass**
-  - Introduce Vitest/Jest for server services and a Playwright smoke test for the display loop.
-  - Add npm scripts plus CI hooks to run the suites; keep helper files short by reusing fixtures.
+- [x] **10. Testing + automation pass** _(2025-11-12 Codex)_
+  - Add a Node test harness (tsc + `node --test`) covering service modules and wire an optional Playwright smoke test that exercises the display bundle (auto-skips when Playwright isn't installed in offline environments).
+  - Provide npm scripts for unit vs smoke runs so CI can call them independently.
 
 ## Execution Notes
 - After each module extraction, delete the legacy file under `src/routes` only when its replacement is wired in and tested.

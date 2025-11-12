@@ -1,17 +1,8 @@
+import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildDefaultPriceMaps, normalizeSettingsInput } from '../src/modules/settings/service'
 
-function run(name: string, fn: () => void) {
-  try {
-    fn()
-    console.log(`✔ ${name}`)
-  } catch (err) {
-    console.error(`✖ ${name}`)
-    throw err
-  }
-}
-
-run('buildDefaultPriceMaps splits guest and regular defaults', () => {
+test('buildDefaultPriceMaps splits guest and regular defaults', () => {
   const maps = buildDefaultPriceMaps([
     { serveSizeId: 1, amountMinor: 450, isGuest: false },
     { serveSizeId: 2, amountMinor: 500, isGuest: true },
@@ -22,7 +13,7 @@ run('buildDefaultPriceMaps splits guest and regular defaults', () => {
   assert.deepEqual(maps.defaultGuestPrices, { '2': 500 })
 })
 
-run('normalizeSettingsInput prepares relation updates and default price writes', () => {
+test('normalizeSettingsInput prepares relation updates and default price writes', () => {
   const normalized = normalizeSettingsInput({
     logoAssetId: 99,
     backgroundAssetId: null,

@@ -1,3 +1,4 @@
+import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createCatalogService, SizeInUseError } from '../src/modules/catalog/service'
 import { CatalogRepo } from '../src/modules/catalog/repo'
@@ -20,18 +21,7 @@ function makeRepo(overrides: Mock = {}): CatalogRepo {
   }
 }
 
-function run(name: string, fn: () => Promise<void> | void) {
-  Promise.resolve()
-    .then(fn)
-    .then(() => console.log(`✔ ${name}`))
-    .catch((err) => {
-      console.error(`✖ ${name}`)
-      console.error(err)
-      process.exitCode = 1
-    })
-}
-
-run('prefillBeerPrices writes defaults with current currency', async () => {
+test('prefillBeerPrices writes defaults with current currency', async () => {
   const inserted: any[] = []
   const service = createCatalogService({
     repo: makeRepo({
@@ -50,7 +40,7 @@ run('prefillBeerPrices writes defaults with current currency', async () => {
   assert.deepEqual(inserted[0], { beerId: 42, serveSizeId: 1, amountMinor: 450, currency: 'GBP' })
 })
 
-run('deleteSize throws when counts exist', async () => {
+test('deleteSize throws when counts exist', async () => {
   const service = createCatalogService({
     repo: makeRepo({
       countSizeUsage: async () => 2,
