@@ -1,18 +1,13 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
-import BeerCell from './components/BeerCell'
-import ArrangementsPanel from './admin/panels/ArrangementsPanel'
-import BackupPanel from './admin/panels/BackupPanel'
-import MediaPanel from './admin/panels/MediaPanel'
+import ArrangementsPanel from '../admin/panels/ArrangementsPanel'
+import BackupPanel from '../admin/panels/BackupPanel'
+import MediaPanel from '../admin/panels/MediaPanel'
 import { io, Socket } from 'socket.io-client'
-
-type Settings = { themeMode: 'light'|'dark'; rotationSec: number; currency: string; defaultSizeId?: number|null; locale?: string; defaultDisplayMode?: 'all'|'beer'|'drinks'|'ads'; logoAssetId?: number|null; backgroundAssetId?: number|null; backgroundPreset?: string|null; cellScale?: number; columnGap?: number; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right'; logoScale?: number; bgPosition?: 'center'|'top'|'bottom'|'left'|'right'; bgScale?: number; beerColumns?: number; itemsPerPage?: number; logoBgEnabled?: boolean; logoBgColor?: string; logoBgRounded?: boolean; logoBgRadius?: number; bgOpacity?: number; logoPadX?: number; logoPadY?: number; pageBgColor?: string; showFooter?: boolean; drinksCellScale?: number; drinksItemsPerCol?: number; drinksIndentPct?: number }
-type Price = { serveSizeId: number; amountMinor: number; currency: string; size?: { id: number; name: string; displayOrder: number; volumeMl?: number } }
-type Beer = { id: number; name: string; brewery: string; style: string; abv?: number; isGuest: boolean; badgeAssetId?: number|null; prices: Price[]; colorHex?: string|null }
-type TapBeer = { tapNumber: number; status: string; beer: Beer|null }
-type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; hideLogo?: boolean; displayOrder?: number }
-type Size = { id: number; name: string; volumeMl: number; displayOrder: number; forBeers?: boolean; forDrinks?: boolean }
-type Discovered = { name: string; host: string; port: number; addresses: string[] }
-type Device = { id:number; name:string; displayMode:'inherit'|'all'|'beer'|'drinks'|'ads'; beerColumns:number; itemsPerColumn:number; cellScale?:number|null; columnGap?:number|null; logoPosition?: 'top-left'|'top-center'|'top-right'|'bottom-left'|'bottom-right' | null; logoScale?: number|null; bgPosition?: 'center'|'top'|'bottom'|'left'|'right' | null; bgScale?: number|null }
+import BeerScreen from './screens/BeerScreen'
+import DrinksScreen from './screens/DrinksScreen'
+import AdScreen from './screens/AdScreen'
+import AdPairScreen from './screens/AdPairScreen'
+import type { Ad, Beer, Device, Discovered, DrinksPage, Settings, Size, TapBeer } from './types'
 
 // Simple overlay that auto-hides the controls when idle
 function useAutoHide(delayMs: number) {
@@ -54,21 +49,7 @@ function LoadingButton({ onClick, children, className }: { onClick: () => Promis
   )
 }
 
-function Admin() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-4">Admin (stub)</h1>
-      <ul className="list-disc ml-5 space-y-1">
-        <li>Settings: theme, rotation, default prices, locale</li>
-        <li>Beers: CRUD and prices per size</li>
-        <li>Taps: assign/clear/kick, search from history</li>
-        <li>Media: JPG/PNG upload</li>
-      </ul>
-    </div>
-  )
-}
-
-function Display() {
+function DisplayApp() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [taps, setTaps] = useState<TapBeer[]>([])
   const [ads, setAds] = useState<Ad[]>([])
@@ -742,137 +723,23 @@ function Display() {
           No server selected. Open Admin → Server tab to choose or enter the main server URL.
         </div>
       )}
-      {!cur ? (
-        <div className="h-[80vh]" style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : 0 }} />
-      ) : cur.type === 'beer' ? (
-        <div style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : 0 }}>
-          {tapBeers.length === 0 ? (
-            <div className="h-[80vh] flex items-center justify-center text-center">
-              <div className="text-3xl font-semibold opacity-70">No beers are set yet</div>
-            </div>
-          ) : (
-            <div className="grid" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))`, columnGap: `${effColumnGap}px` }}>
-              {cur.data.map((row: { tapNumber: number; status: string; beer: Beer }, idx: number) => {
-                const factor = 0.7 + (effCellScale/100) * 1.5
-                return (
-                  <BeerCell
-                    key={row.tapNumber}
-                    tapNumber={row.tapNumber}
-                    status={row.status}
-                    beer={row.beer}
-                    factor={factor}
-                    contentBase={contentBase}
-                    defaultSizeId={settings?.defaultSizeId ?? null}
-                    formatMoney={formatMoney}
-                  />
-                )})}
-            </div>
-          )}
-        </div>
-      ) : cur.type === 'ad' ? (
-        <div className="h-full w-full flex items-center justify-center" style={{ 
-          paddingTop: curIsFullscreen ? 0 : (effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem'),
-          paddingBottom: curIsFullscreen ? 0 : footPadPx,
-          paddingLeft: curIsFullscreen ? 0 : '1.5rem',
-          paddingRight: curIsFullscreen ? 0 : '1.5rem',
-        }}>
-          {(() => {
-            const ad = cur.data as Ad
-            const isPortrait = Number(ad.height || 0) > Number(ad.width || 0)
-            const cls = curIsFullscreen
-              ? (isPortrait ? 'h-full w-full object-contain' : 'h-full w-full object-cover')
-              : 'max-h-full max-w-full object-contain'
-            return <img src={`${contentBase}/api/assets/${ad.id}/content`} alt={ad.filename} className={cls} />
-          })()}
-        </div>
-      ) : cur.type==='drinks' ? (
-        <div className="px-6 py-6 overflow-auto" style={{ paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem', paddingBottom: footPadPx }}>
-          {(() => {
-            const page = cur.data as { columns: Array<Array<{ kind:'header'; name:string }|{ kind:'item'; drink:any }>> }
-            const sizeMap = new Map<number, Size>()
-            sizes.forEach(s => sizeMap.set(s.id, s))
-            return (
-              <div className="grid" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))`, columnGap: `${effColumnGap}px` }}>
-                {page.columns.map((col, ci) => (
-                  <div key={`col-${ci}`} className="space-y-2">
-                    {col.map((e, idx) => e.kind==='header' ? (
-                      <div key={`hdr-${ci}-${idx}`} className="font-bold mt-2" style={{ fontSize: Math.max(18, Math.round(30 * (effDrinksCellScale/50))) }}>{e.name}</div>
-                    ) : (
-                      <div key={`itm-${ci}-${idx}`} className="mb-3 border-b border-neutral-800/40 pb-1">
-                        <div className="flex items-start justify-between gap-3">
-                          {e.drink.logoAssetId ? (
-                            <div className="flex items-stretch gap-0 flex-1 min-w-0">
-                              <div className="shrink-0 self-start" style={{ width: `${localDrinksIndentPct}%` }}>
-                                <img src={`${contentBase}/api/assets/${e.drink.logoAssetId}/content`} alt={e.drink.name} className="block w-full max-h-24 object-contain" />
-                              </div>
-                              <div className="min-w-0 pl-[18px]">
-                                <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (effDrinksCellScale/50))) }}>{e.drink.name}</div>
-                                {(() => {
-                                  const d = e.drink
-                                  const parts: string[] = []
-                                  if (d.producer) parts.push(String(d.producer))
-                                  if (d.style) parts.push(String(d.style))
-                                  if (d.origin) parts.push(String(d.origin))
-                                  if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
-                                  return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (effDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
-                                })()}
-                                {e.drink.description ? (
-                                  <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (effDrinksCellScale/50))) }}>{e.drink.description}</div>
-                                ) : null}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="min-w-0 flex-1" style={{ paddingLeft: `calc(${effDrinksIndentPct}% + 18px)` }}>
-                              <div className="font-semibold truncate" style={{ fontSize: Math.max(14, Math.round(20 * (effDrinksCellScale/50))) }}>{e.drink.name}</div>
-                              {(() => {
-                                const d = e.drink
-                                const parts: string[] = []
-                                if (d.producer) parts.push(String(d.producer))
-                                if (d.style) parts.push(String(d.style))
-                                if (d.origin) parts.push(String(d.origin))
-                                if (typeof d.abv === 'number') parts.push(`${d.abv}%`)
-                                return parts.length ? <div className="opacity-80 truncate" style={{ fontSize: Math.max(10, Math.round(12 * (effDrinksCellScale/50))) }}>{parts.join(' • ')}</div> : null
-                              })()}
-                              {e.drink.description ? (
-                                <div className="opacity-80 whitespace-pre-wrap mt-0.5" style={{ fontSize: Math.max(10, Math.round(12 * (effDrinksCellScale/50))) }}>{e.drink.description}</div>
-                              ) : null}
-                            </div>
-                          )}
-                          <div className="text-right whitespace-nowrap">
-                            {Array.isArray(e.drink.prices) && e.drink.prices
-                              .filter((p:any)=> (p.amountMinor||0)>0 && sizeMap.get(p.serveSizeId)?.forDrinks !== false)
-                              .sort((a:any,b:any)=> (sizeMap.get(a.serveSizeId)?.displayOrder||0) - (sizeMap.get(b.serveSizeId)?.displayOrder||0))
-                              .map((p:any, pi:number) => (
-                                <div key={`pr-${e.drink.id}-${p.serveSizeId}-${pi}`} style={{ fontSize: Math.max(10, Math.round(14 * (effDrinksCellScale/50))) }}>
-                                  <span className="opacity-70">{sizeMap.get(p.serveSizeId)?.name}</span>
-                                  <span className="mx-1">-</span>
-                                  <span className="font-semibold">{formatMoney(p.amountMinor, p.currency)}</span>
-                                </div>
-                              ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )
-          })()}
-        </div>
-      ) : (
-        <div className="h-full w-full grid grid-cols-2 gap-4 items-center justify-center" style={{ 
-          paddingTop: effLogoPosition.startsWith('top') ? logoBoxH : '1.5rem',
-          paddingBottom: footPadPx,
-          paddingLeft: '1.5rem',
-          paddingRight: '1.5rem',
-        }}>
-          {(cur.data as Ad[]).map((a, i) => (
-            <div key={i} className="flex items-center justify-center">
-              <img src={`${contentBase}/api/assets/${a.id}/content`} alt={a.filename} className="max-h-full max-w-full object-contain" />
-            </div>
-          ))}
-        </div>
-      )}
+      {renderSlide({
+        cur,
+        tapBeers,
+        columns,
+        columnGap: effColumnGap,
+        cellScale: effCellScale,
+        drinksCellScale: effDrinksCellScale,
+        drinksIndentPct: effDrinksIndentPct,
+        sizes,
+        contentBase,
+        formatMoney,
+        defaultSizeId: settings?.defaultSizeId ?? null,
+        curIsFullscreen,
+        footPadPx,
+        logoBoxH,
+        logoOnTop: effLogoPosition.startsWith('top'),
+      })}
       {(settings?.showFooter !== false) && !curIsFullscreen && (
         <div className="fixed inset-x-0 bottom-3 flex justify-center">
           <div className="px-7 py-2 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
@@ -891,13 +758,11 @@ function Display() {
   )
 }
 
-export default function App() {
-  // Route: standalone admin on /admin
-  const path = typeof window !== 'undefined' ? window.location.pathname : '/'
-  if (path.startsWith('/admin')) return <AdminPage />
-  // Default to display view; admin is an overlay toggle within Display
-  return <Display />
+export default function DisplayEntry() {
+  return <DisplayApp />
 }
+
+export { AdminPage }
 
 // ----- Admin Overlay Components -----
 // ArrangementsPanel moved to web/src/admin/panels/ArrangementsPanel.tsx
@@ -965,6 +830,112 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
         {/* Devices tab removed */}
       </div>
     </div>
+  )
+}
+
+type Slide =
+  | { type: 'beer'; data: Array<{ tapNumber: number; status: string; beer: Beer }> }
+  | { type: 'ad'; data: Ad }
+  | { type: 'drinks'; data: DrinksPage }
+  | { type: 'adpair'; data: Ad[] }
+
+type SlideRenderProps = {
+  cur: Slide | null
+  tapBeers: TapBeer[]
+  columns: number
+  columnGap: number
+  cellScale: number
+  drinksCellScale: number
+  drinksIndentPct: number
+  sizes: Size[]
+  contentBase: string
+  formatMoney: (amountMinor: number, currency?: string) => string
+  defaultSizeId: number | null
+  curIsFullscreen: boolean
+  footPadPx: number
+  logoBoxH: number
+  logoOnTop: boolean
+}
+
+function renderSlide({
+  cur,
+  tapBeers,
+  columns,
+  columnGap,
+  cellScale,
+  drinksCellScale,
+  drinksIndentPct,
+  sizes,
+  contentBase,
+  formatMoney,
+  defaultSizeId,
+  curIsFullscreen,
+  footPadPx,
+  logoBoxH,
+  logoOnTop,
+}: SlideRenderProps) {
+  if (!cur) {
+    return <div className="h-[80vh]" style={{ paddingTop: logoOnTop ? logoBoxH : 0 }} />
+  }
+
+  const defaultPadTop: number | string = logoOnTop ? logoBoxH : '1.5rem'
+  const beerPadTop = logoOnTop ? logoBoxH : 0
+  const padX: number | string = '1.5rem'
+
+  if (cur.type === 'beer') {
+    return (
+      <BeerScreen
+        rows={cur.data}
+        hasBeers={tapBeers.length > 0}
+        columns={columns}
+        columnGap={columnGap}
+        cellScale={cellScale}
+        paddingTop={beerPadTop}
+        contentBase={contentBase}
+        defaultSizeId={defaultSizeId}
+        formatMoney={formatMoney}
+      />
+    )
+  }
+
+  if (cur.type === 'ad') {
+    return (
+      <AdScreen
+        ad={cur.data}
+        contentBase={contentBase}
+        fullscreen={curIsFullscreen}
+        paddingTop={defaultPadTop}
+        paddingBottom={footPadPx}
+        paddingX={padX}
+      />
+    )
+  }
+
+  if (cur.type === 'drinks') {
+    return (
+      <DrinksScreen
+        page={cur.data}
+        sizes={sizes}
+        columns={columns}
+        columnGap={columnGap}
+        paddingTop={defaultPadTop}
+        paddingBottom={footPadPx}
+        indentPct={drinksIndentPct}
+        cellScale={drinksCellScale}
+        contentBase={contentBase}
+        formatMoney={formatMoney}
+      />
+    )
+  }
+
+  return (
+    <AdPairScreen
+      ads={cur.data}
+      contentBase={contentBase}
+      paddingTop={defaultPadTop}
+      paddingBottom={footPadPx}
+      paddingX={padX}
+    />
   )
 }
 

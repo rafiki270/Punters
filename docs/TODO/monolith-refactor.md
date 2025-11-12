@@ -34,13 +34,13 @@
 - [x] **6. Media & assets module** _(2025-11-12 Codex)_
   - Extract upload/asset persistence to its own service; clarify lifecycle hooks (auto-delete unused assets).
   - Prepare hook points for CDN/local storage switching later.
-- [ ] **7. Devices + display preferences module**
+- [x] **7. Devices + display preferences module** _(2025-11-12 Codex)_
   - Consolidate client preference storage, pairing logic, and socket sync helpers into one module.
   - Server routes focus on validation + serialization, while services orchestrate Prisma + Socket.IO.
-- [ ] **8. Discovery + networking module**
+- [x] **8. Discovery + networking module** _(2025-11-12 Codex)_
   - Wrap Bonjour/mDNS helpers in a module that exposes explicit commands (`startServerAdvert`, `listPeers`).
   - Replace direct imports in `src/server.ts` with the module interface.
-- [ ] **9. Frontend entry split**
+- [x] **9. Frontend entry split** _(2025-11-12 Codex)_
   - Create `web/src/admin/App.tsx` and `web/src/display/App.tsx`, move existing logic into feature-specific components (<500 lines each).
   - Wire Vite with two entry points and lazy-load shared design system pieces.
 - [ ] **10. Testing + automation pass**
