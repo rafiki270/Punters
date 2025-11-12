@@ -1,11 +1,56 @@
 import { FastifyInstance } from 'fastify'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { prisma } from '../db'
 import { requireAdmin } from '../auth'
+
+const execFileAsync = promisify(execFile)
+
+async function runGit(args: string[]) {
+  const { stdout } = await execFileAsync('git', args, { cwd: process.cwd() })
+  return stdout.trim()
+}
 
 let resetCode: string | null = null
 let resetExpiresAt = 0
 
 export async function registerAdminRoutes(app: FastifyInstance) {
+  app.post('/api/admin/system/update', { preHandler: requireAdmin }, async (_req, reply) => {
+    try {
+      await execFileAsync('git', ['fetch', '--quiet'], { cwd: process.cwd() })
+    } catch (err) {
+      app.log.error({ err }, 'git fetch failed')
+      return reply.code(500).send({ error: 'Failed to fetch latest changes' })
+    }
+    let upstreamSha: string | null = null
+    try {
+      upstreamSha = await runGit(['rev-parse', '@{u}'])
+    } catch {
+      upstreamSha = null
+    }
+    if (!upstreamSha) {
+      return reply.code(200).send({ status: 'unknown', message: 'No upstream branch configured. Set an upstream (e.g., git branch --set-upstream-to=origin/main).' })
+    }
+    let headSha: string
+    try {
+      headSha = await runGit(['rev-parse', 'HEAD'])
+    } catch (err) {
+      app.log.error({ err }, 'git rev-parse HEAD failed')
+      return reply.code(500).send({ error: 'Unable to determine current revision' })
+    }
+    if (headSha === upstreamSha) {
+      return reply.send({ status: 'already-up-to-date', head: headSha })
+    }
+    try {
+      await execFileAsync('git', ['pull', '--ff-only'], { cwd: process.cwd() })
+    } catch (err) {
+      app.log.error({ err }, 'git pull failed')
+      return reply.code(500).send({ error: 'Failed to pull latest changes', detail: err instanceof Error ? err.message : String(err) })
+    }
+    const newHead = await runGit(['rev-parse', 'HEAD']).catch(() => headSha)
+    return reply.send({ status: 'updated', previous: headSha, head: newHead })
+  })
+
   // Request a short-lived reset code to confirm factory reset
   app.post('/api/admin/factory-reset/request', { preHandler: requireAdmin }, async () => {
     // Generate a 6-digit code

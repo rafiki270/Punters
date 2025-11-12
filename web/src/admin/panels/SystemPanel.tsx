@@ -16,9 +16,41 @@ function LoadingButton({ onClick, children, className }: { onClick: () => Promis
   )
 }
 
-export default function BackupPanel() {
+type UpdateResult = { status: string; message: string }
+
+export default function SystemPanel() {
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
+  const [updateBusy, setUpdateBusy] = useState(false)
+  const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null)
+
+  async function runUpdate() {
+    if (updateBusy) return
+    setUpdateBusy(true)
+    try {
+      let payload: any = null
+      const res = await fetch('/api/admin/system/update', { method: 'POST', credentials: 'include' })
+      try { payload = await res.json() } catch {}
+      if (!res.ok) {
+        const msg = payload?.error || payload?.detail || 'Update failed'
+        throw new Error(msg)
+      }
+      const status = payload?.status || 'unknown'
+      const head = typeof payload?.head === 'string' ? payload.head.slice(0, 7) : null
+      const message = payload?.message
+        || (status === 'already-up-to-date'
+          ? 'Already up to date.'
+          : status === 'updated'
+            ? `Updated to ${head || 'latest commit'}.`
+            : 'Update completed.')
+      setUpdateResult({ status, message })
+    } catch (e) {
+      const msg = (e instanceof Error) ? e.message : String(e)
+      setUpdateResult({ status: 'error', message: msg })
+    } finally {
+      setUpdateBusy(false)
+    }
+  }
 
   async function downloadDb() {
     try {
@@ -76,8 +108,32 @@ export default function BackupPanel() {
     }
   }
 
+  const updateColor = updateResult?.status === 'error'
+    ? 'text-red-600'
+    : updateResult?.status === 'updated'
+      ? 'text-green-600'
+      : updateResult?.status === 'already-up-to-date'
+        ? 'text-green-500'
+        : 'text-neutral-500'
+
   return (
     <div className="space-y-4 text-sm">
+      <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
+        <div className="font-semibold mb-2">System Update</div>
+        <div className="opacity-80 mb-2">Pull the latest code from GitHub without leaving the display.</div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            onClick={runUpdate}
+            disabled={updateBusy}
+            className={`px-3 py-1.5 rounded bg-blue-600 text-white border border-blue-700 shadow ${updateBusy ? 'opacity-80 cursor-not-allowed' : ''}`}
+          >
+            {updateBusy ? 'Updating…' : 'Check & Update'}
+          </button>
+          <span className={`text-sm ${updateColor}`}>
+            {updateResult?.message || 'Idle — click update to check for changes.'}
+          </span>
+        </div>
+      </div>
       <div className="p-3 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/40">
         <div className="font-semibold mb-2">Download Backup</div>
         <div className="opacity-80 mb-2">Export the entire database (SQLite) as a .db file.</div>

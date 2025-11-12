@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import ArrangementsPanel from '../admin/panels/ArrangementsPanel'
-import BackupPanel from '../admin/panels/BackupPanel'
+import SystemPanel from '../admin/panels/SystemPanel'
 import MediaPanel from '../admin/panels/MediaPanel'
 import { io, Socket } from 'socket.io-client'
 import BeerScreen from './screens/BeerScreen'
@@ -778,12 +778,17 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
       { key: 'drinks', label: 'Other drinks' },
       { key: 'media', label: 'Media' },
       { key: 'arrange', label: 'Arrangements' },
-      { key: 'backup', label: 'Backup' },
+      { key: 'system', label: 'System' },
     ] as any : [])
   ]
   // Persist last-opened tab per session
+  const normalizeTabKey = (value: string | null) => {
+    if (value === 'backup') return 'system'
+    return value
+  }
   const [tab, setTab] = useState<string>(() => {
-    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('adminLastTab') : null
+    const savedRaw = typeof window !== 'undefined' ? sessionStorage.getItem('adminLastTab') : null
+    const saved = normalizeTabKey(savedRaw)
     // If in client mode, force Settings
     if ((mode !== 'server') && saved && saved !== 'settings') return 'settings'
     return saved || 'settings'
@@ -825,7 +830,7 @@ function AdminOverlay({ isOpen, sizes, settings, onClose, onRefresh, mode, serve
         {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'drinks' && <DrinksPanel sizes={sizes} onRefresh={onRefresh} />}
         {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={onRefresh} />}
-        {uiMode==='server' && tab === 'backup' && <BackupPanel />}
+        {uiMode==='server' && tab === 'system' && <SystemPanel />}
         {uiMode==='server' && tab === 'arrange' && <ArrangementsPanel />}
         {/* Devices tab removed */}
       </div>
@@ -953,8 +958,10 @@ function AdminPage() {
   const [adminDrinksIndentPct, setAdminDrinksIndentPct] = useState<number>(()=>{ const v=Number(localStorage.getItem('drinksIndentPct')||''); return Number.isFinite(v)?Math.max(0,Math.min(30,v)):10 })
   const [localShowDrinks, setLocalShowDrinks] = useState<boolean>(()=> { const v=localStorage.getItem('localShowDrinks'); return v==null?true:v==='true' })
 
+  const normalizeStandaloneTab = (value: string | null) => value === 'backup' ? 'system' : value
   const [tab, setTab] = useState<string>(() => {
-    const saved = typeof window !== 'undefined' ? sessionStorage.getItem('adminLastTab') : null
+    const savedRaw = typeof window !== 'undefined' ? sessionStorage.getItem('adminLastTab') : null
+    const saved = normalizeStandaloneTab(savedRaw)
     return saved || 'settings'
   })
   useEffect(() => { try { sessionStorage.setItem('adminLastTab', tab) } catch {} }, [tab])
@@ -996,7 +1003,7 @@ function AdminPage() {
       { key: 'drinks', label: 'Other drinks' },
       { key: 'media', label: 'Media' },
       { key: 'arrange', label: 'Arrangements' },
-      { key: 'backup', label: 'Backup' },
+      { key: 'system', label: 'System' },
     ] as any : [])
   ]
 
@@ -1016,7 +1023,7 @@ function AdminPage() {
       {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'drinks' && <DrinksPanel sizes={sizes} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={loadAll} />}
-      {uiMode==='server' && tab === 'backup' && <BackupPanel />}
+      {uiMode==='server' && tab === 'system' && <SystemPanel />}
       {uiMode==='server' && tab === 'arrange' && <ArrangementsPanel />}
     </div>
   )
@@ -1540,7 +1547,7 @@ function SizesPanel({ onRefresh }: { onRefresh: () => void }) {
   )
 }
 
-// BackupPanel moved to web/src/admin/panels/BackupPanel.tsx
+// SystemPanel moved to web/src/admin/panels/SystemPanel.tsx
 
 function BeersPanel({ sizes, onRefresh }: { sizes: Size[]; onRefresh: () => void }) {
   const [beers, setBeers] = useState<Beer[]>([])

@@ -8,6 +8,7 @@ HOST_PORT ?= 80
   pi-setup pi-launch pi-launch-client \
   pi-force-autologin \
   check-api docker-toggle docker-publish-latest docker-release \
+  service \
   test
 
 .DEFAULT_GOAL := help
@@ -207,3 +208,7 @@ docker-release: ## Tag git with VERSION and push (triggers CI release)
 	@if [ -z "$$VERSION" ]; then echo "Set VERSION, e.g. make docker-release VERSION=v1.2.3"; exit 1; fi
 	@git tag -a "$$VERSION" -m "Release $$VERSION" || true
 	@git push origin "$$VERSION"
+
+service: ## Install and enable auto-start services (server + browser launcher)
+	@echo "Installing platform-specific services..."
+	node scripts/install-service.mjs
