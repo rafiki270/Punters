@@ -1,4 +1,4 @@
-import { AdminPage } from '../display/DisplayApp'
+import AdminPage from '../display/admin/AdminPage'
 
 export default function AdminApp() {
   return <AdminPage />

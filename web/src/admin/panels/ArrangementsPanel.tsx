@@ -223,6 +223,7 @@ function OptionsPopup({ id, initialName, content, onUpdate }: { id: string; init
   const [name, setName] = React.useState(initialName)
   const initialMode = (() => {
     const { showBeer, showDrinks, showMedia } = content
+    if (showMedia && (showBeer || showDrinks)) return 'everything'
     if (showMedia && !showBeer && !showDrinks) return 'media'
     if (showBeer && showDrinks) return 'both'
     if (showBeer) return 'beer'
@@ -239,7 +240,8 @@ function OptionsPopup({ id, initialName, content, onUpdate }: { id: string; init
     setSaved(false)
     // Build content patch from selected mode
     const patch: Partial<{showBeer:boolean; showDrinks:boolean; showMedia:boolean}> = {}
-    if (mode==='media') { patch.showBeer=false; patch.showDrinks=false; patch.showMedia=true }
+    if (mode==='everything') { patch.showBeer=true; patch.showDrinks=true; patch.showMedia=true }
+    else if (mode==='media') { patch.showBeer=false; patch.showDrinks=false; patch.showMedia=true }
     else if (mode==='beer') { patch.showBeer=true; patch.showDrinks=false; patch.showMedia=false }
     else if (mode==='drinks') { patch.showBeer=false; patch.showDrinks=true; patch.showMedia=false }
     else { patch.showBeer=true; patch.showDrinks=true; patch.showMedia=false }
@@ -262,11 +264,13 @@ function OptionsPopup({ id, initialName, content, onUpdate }: { id: string; init
       <div className="font-semibold mt-3 mb-1 text-xs">Display content</div>
       <select value={mode} onChange={(e)=>{ setMode(e.target.value); /* apply immediately */
         const v = e.target.value
-        if (v==='media') onUpdate({ showBeer:false, showDrinks:false, showMedia:true })
+        if (v==='everything') onUpdate({ showBeer:true, showDrinks:true, showMedia:true })
+        else if (v==='media') onUpdate({ showBeer:false, showDrinks:false, showMedia:true })
         else if (v==='beer') onUpdate({ showBeer:true, showDrinks:false, showMedia:false })
         else if (v==='drinks') onUpdate({ showBeer:false, showDrinks:true, showMedia:false })
         else onUpdate({ showBeer:true, showDrinks:true, showMedia:false })
       }} className="w-full mb-3 px-3 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
+        <option value="everything">All content (beers + drinks + media)</option>
         <option value="beer">Beers only</option>
         <option value="drinks">Drinks only</option>
         <option value="both">Beers + Drinks</option>

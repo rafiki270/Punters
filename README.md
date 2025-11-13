@@ -27,14 +27,48 @@ Punters is a digital beer board for pubs, taprooms, and tasting rooms. It keeps 
 - **Network-friendly:** Auto-discovers servers on your LAN, or point a client directly at a URL.
 
 ## Get started
-1. **Pick your hardware.** Any modern device with Node.js (Pi 4+, mini PC, or desktop) works as the server. TVs just need a browser.
-2. **Install Punters.** The fastest path is the Raspberry Pi installer or Docker script (see below). Devs can also run `npm run dev` locally.
-3. **Load your menu.** Use the admin overlay to add sizes, beers, and promos. Changes appear instantly across every screen.
-4. **Customize the look.** Set rotation timing, colors, logos, and pairing preferences that fit your space.
+1. **Pick your hardware.** A Raspberry Pi 4, fanless mini PC, or spare desktop can act as the “main” player; TVs only need a browser window pointed at it.
+2. **Install Punters.** Use the one-line installers below to pull the repo, install dependencies, and wire up kiosk mode.
+3. **Launch the board.** From the project directory run:
+
+```bash
+make launch80
+```
+
+Prefer the default dev ports? Run:
+
+```bash
+make launch
+```
+
+4. **Keep it running.** Install Punters as a system service so it auto-starts on boot:
+
+```bash
+sudo make service
+```
+5. **Load your menu.** Open the Admin overlay, add sizes, beers, and promos, and the TVs will update in seconds.
 
 ### Install options
-- **Raspberry Pi kiosk:** `sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-install.sh)"`
-- **Docker host (Pi, mini PC, cloud VM):** `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/deploy/install.sh)" -- --port 80 --data-dir /opt/punters/data --image ghcr.io/rafiki270/punters:latest`
-- **Manual/dev setup:** Clone this repo, run `make install`, then `npm run dev` (server) and `npm run dev:web` (frontend).
+- **Raspberry Pi kiosk:**
+
+```bash
+sudo /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/refs/heads/main/scripts/rpi-install.sh)"
+```
+
+- **Docker host (Pi, mini PC, cloud VM):**
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rafiki270/Punters/main/deploy/install.sh)" -- --port 80 --data-dir /opt/punters/data --image ghcr.io/rafiki270/punters:latest
+```
+
+- **Manual/dev setup (clone → install → launch):**
+
+```bash
+make install
+make launch80
+```
+
+### One-click updates
+Need the latest fixes? Open the Admin overlay, head to the System tab, and press **Check for updates**. Punters fetches the newest code and runs `git pull --ff-only` in the background, so you can keep serving beers while it updates.
 
 Need wiring diagrams, API docs, or contributor notes? Check **[TECH.md](TECH.md)** for the full engineering handbook, including architecture, commands, and deployment details.

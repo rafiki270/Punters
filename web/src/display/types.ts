@@ -99,6 +99,8 @@ export type Device = {
 export type Drink = {
   id: number
   name: string
+  categoryId?: number | null
+  displayOrder?: number | null
   producer?: string | null
   style?: string | null
   abv?: number | null
@@ -112,3 +114,9 @@ export type Drink = {
 export type DrinkEntry = { kind: 'header'; name: string } | { kind: 'item'; drink: Drink }
 export type DrinksPage = { columns: DrinkEntry[][] }
 export type Discovered = { name: string; host: string; port: number; addresses: string[] }
+
+export type Slide =
+  | { type: 'beer'; data: Array<{ tapNumber: number; status: string; beer: Beer }> }
+  | { type: 'ad'; data: Ad }
+  | { type: 'drinks'; data: DrinksPage }
+  | { type: 'adpair'; data: Ad[] }
