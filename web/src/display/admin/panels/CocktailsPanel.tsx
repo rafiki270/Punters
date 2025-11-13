@@ -187,7 +187,7 @@ export default function CocktailsPanel({ currency, onRefresh }: CocktailsPanelPr
                 <button
                   type="button"
                   onClick={() => startEdit(cocktail)}
-                  className="p-2 rounded bg-neutral-200 text-neutral-900 text-xs dark:bg-neutral-700 dark:text-neutral-100"
+                  className="p-1 text-lg text-neutral-700 dark:text-neutral-200 hover:text-neutral-900 dark:hover:text-white transition-colors"
                   title="Edit cocktail"
                 >
                   ✏️
@@ -195,7 +195,7 @@ export default function CocktailsPanel({ currency, onRefresh }: CocktailsPanelPr
                 <button
                   type="button"
                   onClick={() => toggleActive(cocktail)}
-                  className={`p-2 rounded text-xs ${cocktail.active ? 'bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100' : 'bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100'}`}
+                  className={`p-1 text-lg transition-colors ${cocktail.active ? 'text-amber-600 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-100' : 'text-green-600 hover:text-green-800 dark:text-green-300 dark:hover:text-green-100'}`}
                   title={cocktail.active ? 'Disable' : 'Enable'}
                 >
                   {cocktail.active ? '🚫' : '✅'}
