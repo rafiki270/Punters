@@ -8,15 +8,28 @@ type Props = {
   paddingX: number | string
 }
 
-export default function AdPairScreen({ ads, contentBase, paddingTop, paddingBottom, paddingX }: Props) {
+export default function AdPairScreen({ ads, contentBase, paddingTop: originalPadTop, paddingBottom, paddingX }: Props) {
+  const slots: Array<Ad | null> = ads.slice(0, 2)
+  while (slots.length < 2) slots.push(null)
+  const resolvedPadTop =
+    typeof paddingBottom === 'number'
+      ? Math.max(0, paddingBottom * 0.2)
+      : originalPadTop
+
   return (
     <div
-      className="h-full w-full grid grid-cols-2 gap-4 items-center justify-center"
-      style={{ paddingTop, paddingBottom, paddingLeft: paddingX, paddingRight: paddingX }}
+      className="h-full w-full flex gap-6 min-h-0"
+      style={{ paddingTop: resolvedPadTop, paddingBottom, paddingLeft: paddingX, paddingRight: paddingX }}
     >
-      {ads.map((ad, idx) => (
-        <div key={idx} className="flex items-center justify-center">
-          <img src={`${contentBase}/api/assets/${ad.id}/content`} alt={ad.filename} className="max-h-full max-w-full object-contain" />
+      {slots.map((ad, idx) => (
+        <div key={idx} className="flex-1 min-h-0 min-w-0 flex items-center justify-center">
+          {ad && (
+            <img
+              src={`${contentBase}/api/assets/${ad.id}/content`}
+              alt={ad.filename}
+              className="h-full w-full object-contain"
+            />
+          )}
         </div>
       ))}
     </div>

@@ -8,6 +8,7 @@ import DrinksScreen from './screens/DrinksScreen'
 import AdScreen from './screens/AdScreen'
 import AdPairScreen from './screens/AdPairScreen'
 import type { Ad, Beer, Device, Discovered, DrinksPage, Settings, Size, TapBeer } from './types'
+import { computeAllModeIndex, resolvePauseToggle, computePausedNextSnapshot } from './lib/slidePicker'
 
 // Simple overlay that auto-hides the controls when idle
 function useAutoHide(delayMs: number) {
@@ -445,9 +446,8 @@ function DisplayApp() {
     const adsSorted = ads.slice().sort((a,b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
     for (let i = 0; i < adsSorted.length; i++) {
       const a = adsSorted[i]
-      if (a.fullscreen) { s.push({ type: 'ad', data: a }); continue }
       const next = adsSorted[i+1]
-      const canPair = (x: Ad) => (x.allowPair !== false) && !x.fullscreen
+      const canPair = (x: Ad) => (x.allowPair !== false)
       const isPortrait = (x: Ad) => Number(x.height||0) > Number(x.width||0)
       if (next && canPair(a) && canPair(next) && (isPortrait(a) && isPortrait(next))) {
         s.push({ type: 'adpair', data: [a, next] })
@@ -488,17 +488,13 @@ function DisplayApp() {
     else modeEff = localDisplayMode
 
     if (modeEff === 'all') {
-      // Distributed across screens using screenIndex/count
-      const sc = Math.max(1, screenCountParam)
-      const si = Math.max(1, screenIndexParam)
-      if (slidesLen <= sc) {
-        const idx = si - 1
-        if (idx < slidesLen) { cur = slides[idx]; curIdx = idx } else { cur = null; curIdx = null }
-      } else {
-        const groupStart = (cycle * sc) % slidesLen
-        const idx = (groupStart + si - 1) % slidesLen
+      const idx = computeAllModeIndex(slidesLen, screenCountParam, screenIndexParam, cycle)
+      if (idx != null) {
         cur = slides[idx]
         curIdx = idx
+      } else {
+        cur = null
+        curIdx = null
       }
     } else {
       // Independent rotation for filtered content (beer-only, drinks-only, ads-only)
@@ -510,7 +506,16 @@ function DisplayApp() {
   const curType = cur?.type as any
   const curIsAd = curType === 'ad' || curType === 'adpair'
   const curIsFullscreen = curType === 'ad' && (cur?.data as Ad)?.fullscreen
-  const footPadPx = ((settings?.showFooter !== false) && !curIsFullscreen) ? 96 : 24
+  const curHidesFooter = (() => {
+    if (!cur) return false
+    if (cur.type === 'ad') return (cur.data as Ad)?.fullscreen === true
+    if (cur.type === 'adpair') {
+      const pair = cur.data as Ad[]
+      return Array.isArray(pair) && pair.some(item => item?.fullscreen === true)
+    }
+    return false
+  })()
+  const footPadPx = ((settings?.showFooter !== false) && !curHidesFooter) ? 96 : 24
 
   const contentBase = (mode==='client' && remoteBase) ? remoteBase : ''
   const bgUrl = settings?.backgroundPreset ? settings.backgroundPreset : (settings?.backgroundAssetId ? `${contentBase}/api/assets/${settings.backgroundAssetId}/content` : null)
@@ -541,41 +546,53 @@ function DisplayApp() {
     } : {}),
   }
 
+  const showLogo = useMemo(() => {
+    if (!logoUrl) return false
+    if (!cur) return true
+    if (cur.type === 'adpair') {
+      const pair = cur.data as Ad[]
+      return !(Array.isArray(pair) && pair.some(a => a?.hideLogo === true))
+    }
+    if (cur.type === 'ad') {
+      const adObj = cur.data as Ad | undefined
+      if (adObj?.hideLogo) return false
+      return curIsFullscreen ? adObj?.requireLogo === true : true
+    }
+    return true
+  }, [logoUrl, cur, curIsFullscreen])
+
   const remainingSecs = paused && pauseSnapshot ? pauseSnapshot.secsLeft : effSecs
 
   const handlePauseToggle = useCallback(() => {
-    if (paused) {
-      setPaused(false)
-      setPauseSnapshot(null)
-      return
-    }
-    const snapshotIdx = curIdx != null ? curIdx : null
-    setPauseSnapshot({ idx: snapshotIdx, secsLeft: remainingSecs })
-    setPaused(true)
+    const nextState = resolvePauseToggle(paused, curIdx ?? null, remainingSecs)
+    setPaused(nextState.paused)
+    setPauseSnapshot(nextState.snapshot)
   }, [paused, curIdx, remainingSecs])
 
   const handleNextPage = useCallback(() => {
     if (paused) {
-      if (!slidesLen) return
-      const current = curIdx != null ? curIdx : 0
-      const nextIdx = (current + 1) % slidesLen
-      setPauseSnapshot((prev) => ({ idx: nextIdx, secsLeft: prev?.secsLeft ?? remainingSecs }))
+      const nextSnapshot = computePausedNextSnapshot(slidesLen, curIdx ?? null, remainingSecs, pauseSnapshot)
+      if (nextSnapshot) setPauseSnapshot(nextSnapshot)
       return
     }
     try { socketRef.current?.emit('next_page') } catch {}
-  }, [paused, slidesLen, curIdx, remainingSecs])
+  }, [paused, slidesLen, curIdx, remainingSecs, pauseSnapshot])
 
   // Measure logo to add top padding when logo is at top
   const logoRef = useRef<HTMLDivElement | null>(null)
   const [logoBoxH, setLogoBoxH] = useState<number>(0)
   useEffect(() => {
+    if (!showLogo) {
+      setLogoBoxH(0)
+      return
+    }
     const measure = () => {
       if (logoRef.current) setLogoBoxH(Math.round(logoRef.current.getBoundingClientRect().height + 12))
     }
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
-  }, [logoUrl, effLogoScale, effLogoPosition, effLogoPadX, effLogoPadY, settings?.logoBgEnabled, settings?.logoBgRounded, settings?.logoBgRadius])
+  }, [showLogo, logoUrl, effLogoScale, effLogoPosition, effLogoPadX, effLogoPadY, settings?.logoBgEnabled, settings?.logoBgRounded, settings?.logoBgRadius])
 
   return (
     <div className={`relative h-screen overflow-hidden text-neutral-900 dark:text-neutral-100 ${curIsAd ? '' : 'p-6'}`}>
@@ -664,25 +681,10 @@ function DisplayApp() {
       </div>
 
       {/* Optional logo */}
-  {(() => {
-        const isAd = cur && (cur.type === 'ad' || cur.type === 'adpair')
-        const adObj: Ad | null = (cur && cur.type === 'ad') ? (cur.data as Ad) : null
-        const adPair: Ad[] | null = (cur && cur.type === 'adpair') ? (cur.data as Ad[]) : null
-        const pairHidesLogo = Array.isArray(adPair) ? adPair.some(a => a?.hideLogo === true) : false
-        const showLogo = !!logoUrl && (
-          !isAd ? true : (
-            // For ad pairs, hide if any image requests hide
-            pairHidesLogo ? false : (
-              // For single ads, hide if requested; if fullscreen, only show when explicitly required
-              (adObj?.hideLogo === true) ? false : (curIsFullscreen ? (adObj?.requireLogo === true) : true)
-            )
-          )
-        )
-        return showLogo
-      })() && (
+      {showLogo && (
         <div ref={logoRef} className={`fixed pointer-events-none ${logoPosClass}`}>
           <div style={logoContainerStyle} className="inline-block">
-            <img src={logoUrl} alt="logo" style={{ width: Math.round(96 * (effLogoScale/100)) }} className="object-contain max-h-[20vh]" />
+            <img src={logoUrl!} alt="logo" style={{ width: Math.round(96 * (effLogoScale/100)) }} className="object-contain max-h-[20vh]" />
           </div>
         </div>
       )}
@@ -740,7 +742,7 @@ function DisplayApp() {
         logoBoxH,
         logoOnTop: effLogoPosition.startsWith('top'),
       })}
-      {(settings?.showFooter !== false) && !curIsFullscreen && (
+      {(settings?.showFooter !== false) && !curHidesFooter && (
         <div className="fixed inset-x-0 bottom-3 flex justify-center">
           <div className="px-7 py-2 rounded-full text-sm shadow bg-black/40 text-white dark:bg-neutral-800/80 dark:text-neutral-100 text-center flex flex-col items-center gap-1">
             {slides.length > 1 && (curIdx != null) && (

@@ -80,8 +80,8 @@ export default function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
             </div>
             <div className="mt-2 text-xs space-y-1">
               <label className="flex items-center gap-2"><input type="checkbox" checked={a.allowPair !== false} onChange={e=>update(a, { allowPair: e.target.checked })} /> Allow pairing</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={!!a.fullscreen} onChange={e=>update(a, { fullscreen: e.target.checked })} /> Fullscreen</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={!!a.hideLogo} onChange={e=>update(a, { hideLogo: e.target.checked })} /> Hide logo only</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={!!a.hideLogo} onChange={e=>update(a, { hideLogo: e.target.checked })} /> Hide logo</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={!!a.fullscreen} onChange={e=>update(a, { fullscreen: e.target.checked })} /> Hide footer</label>
             </div>
           </div>
         ))}
