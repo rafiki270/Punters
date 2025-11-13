@@ -168,6 +168,7 @@ model Asset {
   globalLogo GlobalSettings[] @relation("LogoAsset")
   globalBackground GlobalSettings[] @relation("BackgroundAsset")
   drinksWithLogo Drink[] @relation("DrinkLogoAsset")
+  cocktails Cocktail[] @relation("CocktailImage")
 }
 
 model DefaultPrice {
@@ -218,4 +219,17 @@ model DrinkPrice {
   serveSizeId Int
 
   @@unique([drinkId, serveSizeId])
+}
+
+model Cocktail {
+  id             Int      @id @default(autoincrement())
+  name           String
+  ingredients    String?
+  priceMinor     Int
+  currency       String   @default("GBP")
+  active         Boolean  @default(true)
+  imageAssetId   Int?
+  imageAsset     Asset?   @relation("CocktailImage", fields: [imageAssetId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

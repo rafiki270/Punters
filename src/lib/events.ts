@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 
-export type ChangeTopic = 'settings'|'beers'|'taps'|'media'|'sizes'|'devices'|'drinks'
+export type ChangeTopic = 'settings'|'beers'|'taps'|'media'|'sizes'|'devices'|'drinks'|'cocktails'
 
 const ev = new EventEmitter()
 

@@ -8,10 +8,12 @@ type UseSlidesArgs = {
   effBeerItemsPerCol: number
   ads: Ad[]
   drinks: any[]
+  cocktails: any[]
   drinkCategories: any[]
   device: Device | null
   localDisplayMode: DisplayMode
   localShowDrinks: boolean
+  localShowCocktails: boolean
   effDrinksItemsPerCol: number
 }
 
@@ -21,10 +23,12 @@ export default function useSlides({
   effBeerItemsPerCol,
   ads,
   drinks,
+  cocktails,
   drinkCategories,
   device,
   localDisplayMode,
   localShowDrinks,
+  localShowCocktails,
   effDrinksItemsPerCol,
 }: UseSlidesArgs) {
   const tapBeers = useMemo(() => taps.filter(t => t.beer != null).map(t => ({ tapNumber: t.tapNumber, status: t.status, beer: t.beer as Beer })), [taps])
@@ -41,9 +45,13 @@ export default function useSlides({
     const s: Slide[] = []
     beerPages.forEach(pg => s.push({ type: 'beer', data: pg }))
     const hasDrinks = Array.isArray(drinks) && drinks.some((d:any)=>d && d.active!==false)
+    const hasCocktails = Array.isArray(cocktails) && cocktails.some((c:any)=>c && c.active!==false)
     const allowDrinks = (device && device.displayMode !== 'inherit')
       ? (device.displayMode === 'drinks' || device.displayMode === 'all')
       : (localDisplayMode !== 'ads' && localShowDrinks)
+    const allowCocktails = (device && device.displayMode !== 'inherit')
+      ? (device.displayMode === 'drinks' || device.displayMode === 'all')
+      : (localDisplayMode !== 'ads' && localShowCocktails)
     if (hasDrinks && allowDrinks) {
       const cats = (drinkCategories || []).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name)))
       const grouped = cats.map((c:any)=> ({ id:c.id, name:c.name, drinks: (drinks || []).filter((d:any)=> d.categoryId===c.id && d.active!==false).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name))) })).filter((g:any)=> g.drinks.length>0)
@@ -60,6 +68,20 @@ export default function useSlides({
           columnsData.push(pageEntries.slice(c*perCol, (c+1)*perCol))
         }
         s.push({ type:'drinks', data: { columns: columnsData } })
+      }
+    }
+    if (hasCocktails && allowCocktails) {
+      const sorted = (cocktails || []).filter((c:any)=>c && c.active!==false).slice().sort((a:any,b:any)=> String(a.name).localeCompare(String(b.name)))
+      const perCol = Math.max(1, effDrinksItemsPerCol)
+      const colCount = Math.max(1, columns)
+      const perPage = perCol * colCount
+      for (let i=0; i<sorted.length; i+=perPage) {
+        const chunk = sorted.slice(i, i+perPage)
+        const columnsData: any[][] = []
+        for (let c=0;c<colCount;c++) {
+          columnsData.push(chunk.slice(c*perCol, (c+1)*perCol))
+        }
+        s.push({ type:'cocktails', data: { columns: columnsData } })
       }
     }
     const adsSorted = ads.slice().sort((a,b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
@@ -80,7 +102,7 @@ export default function useSlides({
     else modeEff = localDisplayMode
     const filtered = s.filter(sl => slideMatchesMode(modeEff, sl.type))
     return filtered.length ? filtered : [{ type: 'beer', data: [] }]
-  }, [beerPages, ads, drinks, drinkCategories, localDisplayMode, localShowDrinks, device?.displayMode, columns, effDrinksItemsPerCol])
+  }, [beerPages, ads, drinks, cocktails, drinkCategories, localDisplayMode, localShowDrinks, localShowCocktails, device?.displayMode, columns, effDrinksItemsPerCol])
 
   return { tapBeers, slides }
 }

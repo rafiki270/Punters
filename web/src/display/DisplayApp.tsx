@@ -22,6 +22,7 @@ function DisplayApp() {
     sizes,
     drinkCategories,
     drinks,
+    cocktails,
     mode,
     servers,
     remoteBase,
@@ -42,6 +43,8 @@ function DisplayApp() {
     setLocalDisplayMode,
     localShowDrinks,
     setLocalShowDrinks,
+    localShowCocktails,
+    setLocalShowCocktails,
     localBeerItemsPerCol,
     setLocalBeerItemsPerCol,
     localDrinksCellScale,
@@ -119,6 +122,7 @@ function DisplayApp() {
     setScreenCount: setScreenCountParam,
     setLocalDisplayMode,
     setLocalShowDrinks,
+    setLocalShowCocktails,
   })
   // Always enable server-time-based sync so all displays switch together
   const syncEnabled = true
@@ -167,10 +171,12 @@ function DisplayApp() {
     effBeerItemsPerCol,
     ads,
     drinks,
+    cocktails,
     drinkCategories,
     device,
     localDisplayMode,
     localShowDrinks,
+    localShowCocktails,
     effDrinksItemsPerCol,
   })
 

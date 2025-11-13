@@ -24,6 +24,7 @@ import { registerNetworkRoutes } from './routes/network'
 import { registerBackupRoutes } from './routes/backup'
 import { onChange } from './events'
 import { registerDrinkRoutes } from './routes/drinks'
+import { registerCocktailRoutes } from './routes/cocktails'
 import { startDiscovery, getDiscovered, suggestUniqueName, getMdnsHostByIp } from './discovery'
 import { getClientPrefs, setClientPrefs } from './store/displayPrefs'
 import { prisma } from './db'
@@ -42,6 +43,7 @@ type DisplayClient = {
   label?: string | null
   showBeer?: boolean
   showDrinks?: boolean
+  showCocktails?: boolean
   showMedia?: boolean
   screenIndex?: number
   screenCount?: number
@@ -78,6 +80,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerSizeRoutes(app)
   await registerBeerRoutes(app)
   await registerDrinkRoutes(app)
+  await registerCocktailRoutes(app)
   await registerTapRoutes(app)
   await registerI18nRoutes(app)
   await registerMediaRoutes(app)
@@ -195,6 +198,7 @@ function setupDisplaySockets(app: FastifyInstance) {
         label: (typeof p?.label === 'string' && p.label.trim()) ? p.label.trim() : null,
         showBeer: true,
         showDrinks: true,
+        showCocktails: true,
         showMedia: false,
         screenIndex: (typeof p?.screenIndex === 'number' && p.screenIndex > 0) ? p.screenIndex : undefined,
         screenCount: (typeof p?.screenCount === 'number' && p.screenCount > 0) ? p.screenCount : undefined,
@@ -209,6 +213,7 @@ function setupDisplaySockets(app: FastifyInstance) {
             if (typeof pref.label === 'string') info.label = pref.label
             if (typeof pref.showBeer === 'boolean') info.showBeer = pref.showBeer
             if (typeof pref.showDrinks === 'boolean') info.showDrinks = pref.showDrinks
+            if (typeof pref.showCocktails === 'boolean') info.showCocktails = pref.showCocktails
             if (typeof pref.showMedia === 'boolean') info.showMedia = pref.showMedia
           }
         }
@@ -324,6 +329,7 @@ function registerDisplayApi(app: FastifyInstance, io: IOServer, displays: Map<st
       label: x.label || undefined,
       showBeer: x.showBeer ?? true,
       showDrinks: x.showDrinks ?? true,
+      showCocktails: x.showCocktails ?? true,
       showMedia: x.showMedia ?? false,
       screenIndex: x.screenIndex,
       screenCount: x.screenCount,
@@ -388,16 +394,18 @@ function registerDisplayApi(app: FastifyInstance, io: IOServer, displays: Map<st
     const body = (req as any).body || {}
     const showBeer = !!body.showBeer
     const showDrinks = !!body.showDrinks
+    const showCocktails = !!body.showCocktails
     const showMedia = !!body.showMedia
     const d = displays.get(id)
     if (d) {
       d.showBeer = showBeer
       d.showDrinks = showDrinks
+      d.showCocktails = showCocktails
       d.showMedia = showMedia
       displays.set(id, d)
     }
-    try { if (d?.clientId) await setClientPrefs(d.clientId, { showBeer, showDrinks, showMedia }) } catch {}
-    io.to(id).emit('set_content', { showBeer, showDrinks, showMedia })
+    try { if (d?.clientId) await setClientPrefs(d.clientId, { showBeer, showDrinks, showCocktails, showMedia }) } catch {}
+    io.to(id).emit('set_content', { showBeer, showDrinks, showCocktails, showMedia })
     io.emit('admin_changed', { kind: 'content', id })
     return { ok: true }
   })

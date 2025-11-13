@@ -17,6 +17,7 @@ type UseDisplaySocketArgs = {
   setScreenCount: (value: number) => void
   setLocalDisplayMode: (value: 'everything'|'all'|'beer'|'drinks'|'ads') => void
   setLocalShowDrinks: (value: boolean) => void
+  setLocalShowCocktails: (value: boolean) => void
 }
 
 export default function useDisplaySocket({
@@ -34,6 +35,7 @@ export default function useDisplaySocket({
   setScreenCount,
   setLocalDisplayMode,
   setLocalShowDrinks,
+  setLocalShowCocktails,
 }: UseDisplaySocketArgs) {
   const socketRef = useRef<Socket | null>(null)
   const identifyTimer = useRef<number | null>(null)
@@ -93,13 +95,15 @@ export default function useDisplaySocket({
       if (typeof p?.screenIndex === 'number') setScreenIndex(Math.max(1, p.screenIndex))
       if (typeof p?.screenCount === 'number') setScreenCount(Math.max(1, p.screenCount))
     })
-    sock.on('set_content', (p: { showBeer?: boolean; showDrinks?: boolean; showMedia?: boolean }) => {
+    sock.on('set_content', (p: { showBeer?: boolean; showDrinks?: boolean; showCocktails?: boolean; showMedia?: boolean }) => {
       const showBeer = !!p?.showBeer
       const showDrinks = !!p?.showDrinks
+      const showCocktails = !!p?.showCocktails
       const showMedia = !!p?.showMedia
-      const nextMode = modeFromContentFlags(showBeer, showDrinks, showMedia)
+      const nextMode = modeFromContentFlags(showBeer, showDrinks, showCocktails, showMedia)
       setLocalDisplayMode(nextMode)
       setLocalShowDrinks(showDrinks)
+      setLocalShowCocktails(showCocktails)
     })
     sock.on('set_label', (p: { label?: string }) => {
       try { localStorage.setItem('displayLabel', String(p?.label || '')) } catch {}
@@ -129,7 +133,7 @@ export default function useDisplaySocket({
       } catch {}
       socketRef.current = null
     }
-  }, [mode, remoteBase, screenIndex, screenCount, deviceId, loadAll, setEpoch, setCycleOffset, setAnchorMs, setIdentify, setScreenIndex, setScreenCount, setLocalDisplayMode, setLocalShowDrinks])
+  }, [mode, remoteBase, screenIndex, screenCount, deviceId, loadAll, setEpoch, setCycleOffset, setAnchorMs, setIdentify, setScreenIndex, setScreenCount, setLocalDisplayMode, setLocalShowDrinks, setLocalShowCocktails])
 
   return socketRef
 }

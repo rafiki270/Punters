@@ -113,10 +113,21 @@ export type Drink = {
 
 export type DrinkEntry = { kind: 'header'; name: string } | { kind: 'item'; drink: Drink }
 export type DrinksPage = { columns: DrinkEntry[][] }
+export type Cocktail = {
+  id: number
+  name: string
+  ingredients?: string | null
+  priceMinor: number
+  currency: string
+  active?: boolean
+  imageAssetId?: number | null
+}
+export type CocktailsPage = { columns: Cocktail[][] }
 export type Discovered = { name: string; host: string; port: number; addresses: string[] }
 
 export type Slide =
   | { type: 'beer'; data: Array<{ tapNumber: number; status: string; beer: Beer }> }
   | { type: 'ad'; data: Ad }
   | { type: 'drinks'; data: DrinksPage }
+  | { type: 'cocktails'; data: CocktailsPage }
   | { type: 'adpair'; data: Ad[] }

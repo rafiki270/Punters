@@ -18,7 +18,7 @@ export function createMediaService({ prisma, emitChange }: MediaServiceDeps) {
           OR: [
             { tags: null },
             { tags: '' },
-            { tags: { notIn: ['style:logo', 'style:background', 'drink:logo'] } },
+            { tags: { notIn: ['style:logo', 'style:background', 'drink:logo', 'cocktail:image'] } },
           ],
         },
         orderBy: [
@@ -92,7 +92,8 @@ export function createMediaService({ prisma, emitChange }: MediaServiceDeps) {
     async deleteAsset(id: number) {
       const beerUse = await prisma.beer.count({ where: { badgeAssetId: id } })
       const drinkUse = await prisma.drink.count({ where: { logoAssetId: id } }).catch(() => 0)
-      if (beerUse > 0 || (drinkUse ?? 0) > 0) {
+      const cocktailUse = await prisma.cocktail.count({ where: { imageAssetId: id } }).catch(() => 0)
+      if (beerUse > 0 || (drinkUse ?? 0) > 0 || (cocktailUse ?? 0) > 0) {
         throw httpError(400, 'Asset is in use and cannot be deleted from Media.')
       }
       await prisma.asset.delete({ where: { id } }).catch(() => {})

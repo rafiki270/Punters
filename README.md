@@ -11,6 +11,7 @@ Punters is a digital beer board for pubs, taprooms, and tasting rooms. It keeps 
 ## What you can show
 - Current draft list with brewery, style, ABV, and price per pour size.
 - Guest beers, cocktails, or other drinks organized by category.
+- Signature cocktails with hero image, manual ingredients line, and a single house price (toggle on/off when ingredients run out).
 - Promotional artwork or sponsor slides, including paired vertical images.
 - Optional logo badge with custom positioning, size, and background.
 - Countdown footer that tells guests when the next page/slide appears.
@@ -20,6 +21,12 @@ Punters is a digital beer board for pubs, taprooms, and tasting rooms. It keeps 
 - Hide the logo or footer per slide to keep promos full-bleed.
 - Pair or unpair images with a click; drag to reorder playlists.
 - Pause or skip slides on-demand for tastings or special announcements.
+
+### Cocktails made simple
+- Create and edit cocktails from the dedicated **Cocktails** tab—upload a photo, paste ingredients, enter one price, and you’re done.
+- Keep the board accurate with the Enable/Disable toggle (soft archive) so out-of-stock drinks disappear without losing their details.
+- Cocktail slides share the same layout controls as Other Drinks (cell scale, indent, items-per-column) and can be shown alongside beers, drinks, or media per screen.
+- Arrangements now expose Beer, Drinks, Cocktails, and Media checkboxes, letting you mix and match content per TV without touching the rest of the playlist.
 
 ## Fits your setup
 - **Main + client TVs:** Run one “main” device (Raspberry Pi, mini PC, old laptop) and connect as many browser-based clients as you like.

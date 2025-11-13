@@ -5,6 +5,7 @@ import SystemPanel from '../../admin/panels/SystemPanel'
 import type { Discovered, Settings, Size } from '../types'
 import BeersPanel from './panels/BeersPanel'
 import DrinksPanel from './panels/DrinksPanel'
+import CocktailsPanel from './panels/CocktailsPanel'
 import SettingsPanel from './panels/SettingsPanel'
 import SizesPanel from './panels/SizesPanel'
 import StylePanel from './panels/StylePanel'
@@ -64,6 +65,7 @@ export default function AdminPage() {
       { key: 'sizes', label: 'Sizes' },
       { key: 'beers', label: 'Beers' },
       { key: 'taps', label: 'Taps' },
+      { key: 'cocktails', label: 'Cocktails' },
       { key: 'drinks', label: 'Other drinks' },
       { key: 'media', label: 'Media' },
       { key: 'arrange', label: 'Arrangements' },
@@ -85,6 +87,7 @@ export default function AdminPage() {
       {uiMode==='server' && tab === 'sizes' && <SizesPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'beers' && <BeersPanel sizes={sizes} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'taps' && <TapsPanel onRefresh={loadAll} />}
+      {uiMode==='server' && tab === 'cocktails' && <CocktailsPanel currency={settings?.currency} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'drinks' && <DrinksPanel sizes={sizes} onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'media' && <MediaPanel onRefresh={loadAll} />}
       {uiMode==='server' && tab === 'system' && <SystemPanel />}

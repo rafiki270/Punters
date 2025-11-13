@@ -75,6 +75,28 @@ async function main() {
       create: c as any,
     } as any)
   }
+
+  const cocktailCount = await prisma.cocktail.count()
+  if (cocktailCount === 0) {
+    await prisma.cocktail.createMany({
+      data: [
+        {
+          name: 'Old Fashioned',
+          ingredients: 'Bourbon • bitters • sugar • orange twist',
+          priceMinor: 900,
+          currency: 'GBP',
+          active: true,
+        },
+        {
+          name: 'Margarita',
+          ingredients: 'Tequila • Cointreau • lime • salt rim',
+          priceMinor: 850,
+          currency: 'GBP',
+          active: true,
+        },
+      ],
+    })
+  }
 }
 
 main()

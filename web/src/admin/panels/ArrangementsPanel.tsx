@@ -27,7 +27,7 @@ export default function ArrangementsPanel() {
   const [busyId, setBusyId] = React.useState<string | null>(null)
   const [activeId, setActiveId] = React.useState<string | null>(null)
   const [openId, setOpenId] = React.useState<string | null>(null)
-  const [contentById, setContentById] = React.useState<Record<string, { showBeer: boolean; showDrinks: boolean; showMedia: boolean }>>({})
+  const [contentById, setContentById] = React.useState<Record<string, { showBeer: boolean; showDrinks: boolean; showCocktails: boolean; showMedia: boolean }>>({})
   const [syncing, setSyncing] = React.useState(false)
   const [adminUrl, setAdminUrl] = React.useState<string>('')
   const END_ZONE_ID = '__end_zone__'
@@ -41,7 +41,7 @@ export default function ArrangementsPanel() {
           setClients(Array.isArray(d)?d:[])
           // derive content map
           const map: any = {}
-          ;(Array.isArray(d)?d:[]).forEach((c:any)=>{ map[c.id] = { showBeer: !!c.showBeer, showDrinks: !!c.showDrinks, showMedia: !!c.showMedia } })
+          ;(Array.isArray(d)?d:[]).forEach((c:any)=>{ map[c.id] = { showBeer: !!c.showBeer, showDrinks: !!c.showDrinks, showCocktails: c.showCocktails ?? true, showMedia: !!c.showMedia } })
           setContentById(map)
         }
       } catch { if (!cancelled) setClients([]) }
@@ -89,15 +89,18 @@ export default function ArrangementsPanel() {
       const r = await fetch('/api/clients/displays'); const d = await r.json();
       setClients(Array.isArray(d)?d:[])
       const map: any = {}
-      ;(Array.isArray(d)?d:[]).forEach((c:any)=>{ map[c.id] = { showBeer: !!c.showBeer, showDrinks: !!c.showDrinks, showMedia: !!c.showMedia } })
+      ;(Array.isArray(d)?d:[]).forEach((c:any)=>{ map[c.id] = { showBeer: !!c.showBeer, showDrinks: !!c.showDrinks, showCocktails: c.showCocktails ?? true, showMedia: !!c.showMedia } })
       setContentById(map)
     } catch {}
   }
   const syncNow = async () => { if (syncing) return; setSyncing(true); try { await fetch('/api/clients/sync-now', { method:'POST' }) } finally { setTimeout(()=>setSyncing(false), 500) } }
 
-  const togglePopup = (id: string) => { setOpenId(p=>p===id?null:id); if (!contentById[id]) setContentById(prev=>({ ...prev, [id]: { showBeer:true, showDrinks:true, showMedia:true } })) }
-  const updateContent = async (id: string, patch: Partial<{ showBeer: boolean; showDrinks: boolean; showMedia: boolean }>) => {
-    const cur = contentById[id] || { showBeer:true, showDrinks:true, showMedia:true }
+  const togglePopup = (id: string) => {
+    setOpenId(p=>p===id?null:id)
+    if (!contentById[id]) setContentById(prev=>({ ...prev, [id]: { showBeer:true, showDrinks:true, showCocktails:true, showMedia:true } }))
+  }
+  const updateContent = async (id: string, patch: Partial<{ showBeer: boolean; showDrinks: boolean; showCocktails: boolean; showMedia: boolean }>) => {
+    const cur = contentById[id] || { showBeer:true, showDrinks:true, showCocktails:true, showMedia:true }
     const next = { ...cur, ...patch }
     setContentById(prev => ({ ...prev, [id]: next }))
     try { await fetch(`/api/clients/displays/${encodeURIComponent(id)}/content`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(next) }) } catch {}
@@ -162,7 +165,7 @@ export default function ArrangementsPanel() {
                   onPing={()=>ping(c.id, c.n)}
                   open={openId===c.id}
                   onToggle={(e?: any)=>{ e?.stopPropagation?.(); togglePopup(c.id) }}
-                  content={contentById[c.id] || { showBeer:true, showDrinks:true, showMedia:true }}
+                  content={contentById[c.id] || { showBeer:true, showDrinks:true, showCocktails:true, showMedia:true }}
                   onUpdate={(patch)=>updateContent(c.id, patch)}
                   adminUrl={adminUrl}
                 />
@@ -183,7 +186,7 @@ export default function ArrangementsPanel() {
   )
 }
 
-function ScreenTile({ id, label, name, browser, disabled, busy, onPing, open, onToggle, content, onUpdate, adminUrl }: { id: string; label: number; name?: string; browser?: string; disabled?: boolean; busy: boolean; onPing: ()=>void; open: boolean; onToggle: (e?:any)=>void; content: { showBeer:boolean; showDrinks:boolean; showMedia:boolean }; onUpdate: (p: Partial<{showBeer:boolean; showDrinks:boolean; showMedia:boolean}>)=>void; adminUrl?: string }) {
+function ScreenTile({ id, label, name, browser, disabled, busy, onPing, open, onToggle, content, onUpdate, adminUrl }: { id: string; label: number; name?: string; browser?: string; disabled?: boolean; busy: boolean; onPing: ()=>void; open: boolean; onToggle: (e?:any)=>void; content: { showBeer:boolean; showDrinks:boolean; showCocktails:boolean; showMedia:boolean }; onUpdate: (p: Partial<{showBeer:boolean; showDrinks:boolean; showCocktails:boolean; showMedia:boolean}>)=>void; adminUrl?: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !!disabled })
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -219,37 +222,32 @@ function ScreenTile({ id, label, name, browser, disabled, busy, onPing, open, on
   )
 }
 
-function OptionsPopup({ id, initialName, content, onUpdate }: { id: string; initialName: string; content: { showBeer:boolean; showDrinks:boolean; showMedia:boolean }; onUpdate: (p: Partial<{showBeer:boolean; showDrinks:boolean; showMedia:boolean}>)=>void }) {
+function OptionsPopup({ id, initialName, content, onUpdate }: { id: string; initialName: string; content: { showBeer:boolean; showDrinks:boolean; showCocktails:boolean; showMedia:boolean }; onUpdate: (p: Partial<{showBeer:boolean; showDrinks:boolean; showCocktails:boolean; showMedia:boolean}>)=>void }) {
   const [name, setName] = React.useState(initialName)
-  const initialMode = (() => {
-    const { showBeer, showDrinks, showMedia } = content
-    if (showMedia && (showBeer || showDrinks)) return 'everything'
-    if (showMedia && !showBeer && !showDrinks) return 'media'
-    if (showBeer && showDrinks) return 'both'
-    if (showBeer) return 'beer'
-    if (showDrinks) return 'drinks'
-    return 'media'
-  })()
-  const [mode, setMode] = React.useState<string>(initialMode)
+  const [localContent, setLocalContent] = React.useState(content)
   const [busy, setBusy] = React.useState(false)
   const [saved, setSaved] = React.useState(false)
+
+  React.useEffect(() => {
+    setLocalContent(content)
+  }, [content])
+
+  const toggle = (key: keyof typeof localContent) => {
+    setLocalContent((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      onUpdate(next)
+      return next
+    })
+  }
 
   const saveAll = async () => {
     if (busy) return
     setBusy(true)
     setSaved(false)
-    // Build content patch from selected mode
-    const patch: Partial<{showBeer:boolean; showDrinks:boolean; showMedia:boolean}> = {}
-    if (mode==='everything') { patch.showBeer=true; patch.showDrinks=true; patch.showMedia=true }
-    else if (mode==='media') { patch.showBeer=false; patch.showDrinks=false; patch.showMedia=true }
-    else if (mode==='beer') { patch.showBeer=true; patch.showDrinks=false; patch.showMedia=false }
-    else if (mode==='drinks') { patch.showBeer=false; patch.showDrinks=true; patch.showMedia=false }
-    else { patch.showBeer=true; patch.showDrinks=true; patch.showMedia=false }
     try {
-      // Save label and content in parallel
       await Promise.all([
         fetch(`/api/clients/displays/${encodeURIComponent(id)}/label`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ label: name }) }).catch(()=>{}),
-        (async()=>{ try { await onUpdate(patch) } catch {} })(),
+        (async()=>{ try { await onUpdate(localContent) } catch {} })(),
       ])
       setSaved(true)
       setTimeout(()=>setSaved(false), 1200)
@@ -257,25 +255,35 @@ function OptionsPopup({ id, initialName, content, onUpdate }: { id: string; init
       setTimeout(()=>setBusy(false), 200)
     }
   }
+
   return (
     <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-9 w-64 rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow p-3 text-[12px]" onClick={(e)=>{ e.stopPropagation() }}>
       <div className="font-semibold mb-1 text-xs">Display name</div>
-      <input value={name} onChange={(e)=>setName(e.target.value)} placeholder="e.g., tv1" className="w-full px-3 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700" />
+      <input
+        value={name}
+        onChange={(e)=>setName(e.target.value)}
+        placeholder="e.g., tv1"
+        className="w-full px-3 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700"
+      />
       <div className="font-semibold mt-3 mb-1 text-xs">Display content</div>
-      <select value={mode} onChange={(e)=>{ setMode(e.target.value); /* apply immediately */
-        const v = e.target.value
-        if (v==='everything') onUpdate({ showBeer:true, showDrinks:true, showMedia:true })
-        else if (v==='media') onUpdate({ showBeer:false, showDrinks:false, showMedia:true })
-        else if (v==='beer') onUpdate({ showBeer:true, showDrinks:false, showMedia:false })
-        else if (v==='drinks') onUpdate({ showBeer:false, showDrinks:true, showMedia:false })
-        else onUpdate({ showBeer:true, showDrinks:true, showMedia:false })
-      }} className="w-full mb-3 px-3 py-1 rounded bg-white text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">
-        <option value="everything">All content (beers + drinks + media)</option>
-        <option value="beer">Beers only</option>
-        <option value="drinks">Drinks only</option>
-        <option value="both">Beers + Drinks</option>
-        <option value="media">Media only</option>
-      </select>
+      <div className="space-y-2 mb-3">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={localContent.showBeer} onChange={()=>toggle('showBeer')} />
+          <span>Show beers</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={localContent.showDrinks} onChange={()=>toggle('showDrinks')} />
+          <span>Show drinks</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={localContent.showCocktails} onChange={()=>toggle('showCocktails')} />
+          <span>Show cocktails</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={localContent.showMedia} onChange={()=>toggle('showMedia')} />
+          <span>Show media</span>
+        </label>
+      </div>
       <div className="flex items-center justify-between">
         <div className={`text-[10px] ${saved ? 'opacity-80' : 'opacity-0'} transition-opacity duration-200`}>Saved ✓</div>
         <button onClick={saveAll} disabled={busy} className={`px-3 py-1.5 rounded bg-green-600 text-white text-xs ${busy?'opacity-80 cursor-not-allowed':''}`}>Save</button>

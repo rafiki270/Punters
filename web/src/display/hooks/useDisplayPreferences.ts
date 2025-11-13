@@ -36,6 +36,7 @@ export default function useDisplayPreferences() {
     return (stored === 'everything' || stored === 'all' || stored === 'beer' || stored === 'drinks' || stored === 'ads') ? stored : 'all'
   })
   const [localShowDrinks, setLocalShowDrinksState] = useState<boolean>(() => getBoolean('localShowDrinks', true))
+  const [localShowCocktails, setLocalShowCocktailsState] = useState<boolean>(() => getBoolean('localShowCocktails', true))
   const [localBeerItemsPerCol, setLocalBeerItemsPerColState] = useState<number>(() => {
     const val = getNumber('beerItemsPerCol', 10)
     return val > 0 ? val : 10
@@ -64,6 +65,10 @@ export default function useDisplayPreferences() {
   const setLocalShowDrinks = useCallback((value: boolean) => {
     setLocalShowDrinksState(value)
     persist('localShowDrinks', String(value))
+  }, [])
+  const setLocalShowCocktails = useCallback((value: boolean) => {
+    setLocalShowCocktailsState(value)
+    persist('localShowCocktails', String(value))
   }, [])
   const setLocalBeerItemsPerCol = useCallback((value: number) => {
     setLocalBeerItemsPerColState(value)
@@ -105,6 +110,8 @@ export default function useDisplayPreferences() {
     setLocalDisplayMode,
     localShowDrinks,
     setLocalShowDrinks,
+    localShowCocktails,
+    setLocalShowCocktails,
     localBeerItemsPerCol,
     setLocalBeerItemsPerCol,
     localDrinksCellScale,

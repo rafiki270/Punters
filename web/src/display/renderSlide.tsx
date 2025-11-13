@@ -1,5 +1,6 @@
 import BeerScreen from './screens/BeerScreen'
 import DrinksScreen from './screens/DrinksScreen'
+import CocktailsScreen from './screens/CocktailsScreen'
 import AdScreen from './screens/AdScreen'
 import AdPairScreen from './screens/AdPairScreen'
 import type { Slide, Size, TapBeer } from './types'
@@ -81,6 +82,22 @@ export default function renderSlide({
       <DrinksScreen
         page={cur.data}
         sizes={sizes}
+        columns={columns}
+        columnGap={columnGap}
+        paddingTop={defaultPadTop}
+        paddingBottom={footPadPx}
+        indentPct={drinksIndentPct}
+        cellScale={drinksCellScale}
+        contentBase={contentBase}
+        formatMoney={formatMoney}
+      />
+    )
+  }
+
+  if (cur.type === 'cocktails') {
+    return (
+      <CocktailsScreen
+        page={cur.data}
         columns={columns}
         columnGap={columnGap}
         paddingTop={defaultPadTop}

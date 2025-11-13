@@ -6,6 +6,7 @@ test('deleteAsset blocks when asset in use', async () => {
   const prisma: any = {
     beer: { count: async () => 1 },
     drink: { count: async () => 0 },
+    cocktail: { count: async () => 0 },
     asset: { delete: async () => {} },
   }
   const service = createMediaService({ prisma, emitChange: () => {} })

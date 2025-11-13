@@ -7,6 +7,7 @@ type Prefs = {
     label?: string|null
     showBeer?: boolean
     showDrinks?: boolean
+    showCocktails?: boolean
     showMedia?: boolean
   }
 }
@@ -51,4 +52,3 @@ export async function setClientPrefs(clientId: string, update: Prefs[string]): P
   all[clientId] = { ...cur, ...update }
   await savePrefs(all)
 }
-
