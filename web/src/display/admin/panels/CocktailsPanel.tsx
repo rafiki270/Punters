@@ -198,7 +198,7 @@ export default function CocktailsPanel({ currency, onRefresh }: CocktailsPanelPr
                   className={`p-1 text-lg transition-colors ${cocktail.active ? 'text-amber-600 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-100' : 'text-green-600 hover:text-green-800 dark:text-green-300 dark:hover:text-green-100'}`}
                   title={cocktail.active ? 'Disable' : 'Enable'}
                 >
-                  {cocktail.active ? '🚫' : '✅'}
+                  {cocktail.active ? '🗑️' : '↩️'}
                 </button>
               </div>
             </div>

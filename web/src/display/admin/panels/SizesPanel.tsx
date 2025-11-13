@@ -31,7 +31,13 @@ export default function SizesPanel({ onRefresh }: SizesPanelProps) {
                 <label className="flex items-center gap-1"><input type="checkbox" checked={s.forBeers !== false} onChange={async (e)=>{ await fetch(`/api/sizes/${s.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ forBeers: e.target.checked }) }); const fresh = await fetch('/api/sizes').then(r=>r.json()); setList(fresh); await onRefresh() }} /> Beers</label>
                 <label className="flex items-center gap-1"><input type="checkbox" checked={s.forDrinks !== false} onChange={async (e)=>{ await fetch(`/api/sizes/${s.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ forDrinks: e.target.checked }) }); const fresh = await fetch('/api/sizes').then(r=>r.json()); setList(fresh); await onRefresh() }} /> Drinks</label>
               </div>
-              <LoadingButton onClick={()=>del(s.id)} className="px-2 py-0.5 rounded bg-red-600 text-white">Delete</LoadingButton>
+              <LoadingButton
+                onClick={()=>del(s.id)}
+                className="p-1 text-lg text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-100 transition-colors"
+                aria-label="Delete size"
+              >
+                🗑️
+              </LoadingButton>
             </li>
           ))}
         </ul>

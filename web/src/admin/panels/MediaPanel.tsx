@@ -76,7 +76,13 @@ export default function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
             <img src={`/api/assets/${a.id}/content`} alt={a.filename} className="w-full h-32 object-contain bg-neutral-100 dark:bg-neutral-800" />
             <div className="flex items-center justify-between text-xs mt-1">
               <span className="truncate" title={a.filename}>{a.filename}</span>
-              <LoadingButton onClick={()=>remove(a.id)} className="px-2 py-0.5 rounded bg-red-600 text-white">Delete</LoadingButton>
+              <LoadingButton
+                onClick={()=>remove(a.id)}
+                className="p-1 text-lg text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-100 transition-colors"
+                aria-label="Delete media"
+              >
+                🗑️
+              </LoadingButton>
             </div>
             <div className="mt-2 text-xs space-y-1">
               <label className="flex items-center gap-2"><input type="checkbox" checked={a.allowPair !== false} onChange={e=>update(a, { allowPair: e.target.checked })} /> Allow pairing</label>

@@ -63,9 +63,21 @@ export default function BeersPanel({ sizes, onRefresh }: BeersPanelProps) {
             .map(b => (
             <li key={b.id} className="flex items-center justify-between border rounded px-2 py-1 gap-2 border-neutral-300 dark:border-neutral-800">
               <span className="truncate">{b.name} — {b.brewery} • {b.style}{b.abv?` • ${b.abv}%`:''}</span>
-              <div className="flex gap-2">
-                <LoadingButton onClick={()=>openEdit(b.id)} className="px-2 py-0.5 rounded bg-blue-600 text-white border border-blue-700 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Edit</LoadingButton>
-                <LoadingButton onClick={()=>archive(b.id)} className="px-2 py-0.5 rounded bg-red-600 text-white border border-red-700 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Delete</LoadingButton>
+              <div className="flex items-center gap-2">
+                <LoadingButton
+                  onClick={()=>openEdit(b.id)}
+                  className="p-1 text-lg text-neutral-700 dark:text-neutral-200 hover:text-neutral-900 dark:hover:text-white transition-colors"
+                  title="Edit beer"
+                >
+                  ✏️
+                </LoadingButton>
+                <LoadingButton
+                  onClick={()=>archive(b.id)}
+                  className="p-1 text-lg text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-100 transition-colors"
+                  title="Delete beer"
+                >
+                  🗑️
+                </LoadingButton>
               </div>
             </li>
           ))}

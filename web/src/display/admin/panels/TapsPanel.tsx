@@ -39,13 +39,27 @@ export default function TapsPanel({ onRefresh }: TapsPanelProps) {
       <div className="space-y-2">
         {taps.map(t => (
           <div key={t.tapNumber} className="border rounded p-2 text-sm border-neutral-300 dark:border-neutral-800">
-            <div className="flex items-center justify-between">
-              <div className="font-semibold">Tap {t.tapNumber}</div>
-              <div className="flex gap-2">
-                <LoadingButton onClick={()=>setStatus(t.tapNumber,'kicked')} className="px-2 py-0.5 rounded bg-neutral-200 text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Beer Gone</LoadingButton>
-                <LoadingButton onClick={()=>clearTap(t.tapNumber)} className="px-2 py-0.5 rounded bg-neutral-200 text-neutral-900 border border-neutral-300 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Clear</LoadingButton>
+              <div className="flex items-center justify-between">
+                <div className="font-semibold">Tap {t.tapNumber}</div>
+                <div className="flex gap-2">
+                  <LoadingButton
+                    onClick={()=>setStatus(t.tapNumber,'kicked')}
+                    className="p-1 text-lg text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-100 transition-colors"
+                    title="Beer gone"
+                    aria-label="Beer gone"
+                  >
+                    🚫
+                  </LoadingButton>
+                  <LoadingButton
+                    onClick={()=>clearTap(t.tapNumber)}
+                    className="p-1 text-lg text-neutral-700 hover:text-neutral-900 dark:text-neutral-200 dark:hover:text-white transition-colors"
+                    title="Clear tap"
+                    aria-label="Clear tap"
+                  >
+                    🗑️
+                  </LoadingButton>
+                </div>
               </div>
-            </div>
             <div className="mt-2 flex items-center gap-2">
               {t.status === 'kicked' && (
                 <span title="Beer gone" aria-label="Beer gone" className="text-red-600">

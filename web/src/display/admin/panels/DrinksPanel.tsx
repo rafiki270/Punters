@@ -171,11 +171,24 @@ export default function DrinksPanel({ sizes, onRefresh }: DrinksPanelProps) {
                   <LoadingButton onClick={cancelEditCategory} className="px-2 py-0.5 rounded bg-neutral-600 text-white border border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Cancel</LoadingButton>
                 </div>
               ) : (
-                <div className="flex gap-2" onClick={(e)=>e.stopPropagation()}>
-                  <LoadingButton onClick={()=>startEditCategory(c)} className="px-2 py-0.5 rounded bg-blue-600 text-white border border-blue-700 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Edit</LoadingButton>
-                  <LoadingButton onClick={()=>deleteCategory(c.id)} className={`px-2 py-0.5 rounded ${catHasDrinks(c.id)?'bg-neutral-400 cursor-not-allowed border border-neutral-300 dark:border-neutral-700':'bg-red-600 text-white border border-red-700 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700'}`}>
-                    Delete
-                  </LoadingButton>
+                <div className="flex items-center gap-2" onClick={(e)=>e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={()=>startEditCategory(c)}
+                    className="p-1 text-lg text-neutral-700 dark:text-neutral-200 hover:text-neutral-900 dark:hover:text-white transition-colors"
+                    title="Edit category"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    type="button"
+                    onClick={()=>!catHasDrinks(c.id) && deleteCategory(c.id)}
+                    className={`p-1 text-lg transition-colors ${catHasDrinks(c.id) ? 'text-neutral-400 cursor-not-allowed line-through opacity-60' : 'text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-100'}`}
+                    title={catHasDrinks(c.id) ? 'Cannot delete non-empty category' : 'Delete category'}
+                    disabled={catHasDrinks(c.id)}
+                  >
+                    🗑️
+                  </button>
                 </div>
               )}
             </li>
@@ -209,9 +222,21 @@ export default function DrinksPanel({ sizes, onRefresh }: DrinksPanelProps) {
             .map(d => (
             <li key={d.id} className="flex items-center justify-between border rounded px-2 py-1 gap-2 border-neutral-300 dark:border-neutral-800">
               <span className="truncate">{d.name} — {(categories.find(c=>c.id===d.categoryId)?.name) || 'Uncategorized'}</span>
-              <div className="flex gap-2">
-                <LoadingButton onClick={()=>openEdit(d.id)} className="px-2 py-0.5 rounded bg-blue-600 text-white border border-blue-700 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Edit</LoadingButton>
-                <LoadingButton onClick={()=>archive(d.id)} className="px-2 py-0.5 rounded bg-red-600 text-white border border-red-700 dark:bg-neutral-800 dark:text-neutral-100 dark:border-neutral-700">Delete</LoadingButton>
+              <div className="flex items-center gap-2">
+                <LoadingButton
+                  onClick={()=>openEdit(d.id)}
+                  className="p-1 text-lg text-neutral-700 dark:text-neutral-200 hover:text-neutral-900 dark:hover:text-white transition-colors"
+                  title="Edit drink"
+                >
+                  ✏️
+                </LoadingButton>
+                <LoadingButton
+                  onClick={()=>archive(d.id)}
+                  className="p-1 text-lg text-red-600 hover:text-red-800 dark:text-red-300 dark:hover:text-red-100 transition-colors"
+                  title="Delete drink"
+                >
+                  🗑️
+                </LoadingButton>
               </div>
             </li>
           ))}
