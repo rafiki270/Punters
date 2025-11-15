@@ -201,6 +201,7 @@ model Drink {
   origin       String?
   description  String?
   active       Boolean        @default(true)
+  disabled     Boolean        @default(false)
   displayOrder Int            @default(0)
   prices       DrinkPrice[]
   logoAssetId  Int?

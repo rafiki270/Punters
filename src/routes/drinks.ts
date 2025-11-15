@@ -43,6 +43,7 @@ export async function registerDrinkRoutes(app: FastifyInstance) {
 
   const DrinksQuery = z.object({
     active: z.string().optional(),
+    disabled: z.string().optional(),
     categoryId: z.string().optional(),
     withPrices: z.string().optional(),
   })
@@ -50,6 +51,7 @@ export async function registerDrinkRoutes(app: FastifyInstance) {
     const q = parseQuery(req, DrinksQuery)
     return drinks.listDrinks({
       active: q.active ? q.active === 'true' : undefined,
+      disabled: q.disabled ? q.disabled === 'true' : undefined,
       categoryId: q.categoryId ? Number(q.categoryId) : undefined,
       withPrices: q.withPrices === 'true',
     })

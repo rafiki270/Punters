@@ -44,7 +44,8 @@ export default function useSlides({
   const slides = useMemo(() => {
     const s: Slide[] = []
     beerPages.forEach(pg => s.push({ type: 'beer', data: pg }))
-    const hasDrinks = Array.isArray(drinks) && drinks.some((d:any)=>d && d.active!==false)
+    const drinkVisible = (d: any) => d && d.active !== false && d.disabled !== true
+    const hasDrinks = Array.isArray(drinks) && drinks.some(drinkVisible)
     const hasCocktails = Array.isArray(cocktails) && cocktails.some((c:any)=>c && c.active!==false)
     const allowDrinks = (device && device.displayMode !== 'inherit')
       ? (device.displayMode === 'drinks' || device.displayMode === 'all')
@@ -54,7 +55,16 @@ export default function useSlides({
       : (localDisplayMode !== 'ads' && localShowCocktails)
     if (hasDrinks && allowDrinks) {
       const cats = (drinkCategories || []).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name)))
-      const grouped = cats.map((c:any)=> ({ id:c.id, name:c.name, drinks: (drinks || []).filter((d:any)=> d.categoryId===c.id && d.active!==false).slice().sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name))) })).filter((g:any)=> g.drinks.length>0)
+      const grouped = cats
+        .map((c:any)=> ({
+          id:c.id,
+          name:c.name,
+          drinks: (drinks || [])
+            .filter((d:any)=> d.categoryId===c.id && drinkVisible(d))
+            .slice()
+            .sort((a:any,b:any)=> (a.displayOrder-b.displayOrder) || String(a.name).localeCompare(String(b.name)))
+        }))
+        .filter((g:any)=> g.drinks.length>0)
       type Entry = { kind:'header'; name:string } | { kind:'item'; drink:any }
       const entries: Entry[] = []
       grouped.forEach(g => { entries.push({ kind:'header', name:g.name }); g.drinks.forEach((d:any)=> entries.push({ kind:'item', drink:d })) })

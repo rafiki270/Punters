@@ -21,6 +21,7 @@ export default function DrinksPanel({ sizes, onRefresh }: DrinksPanelProps) {
   const [logoFile, setLogoFile] = useState<File|null>(null)
   const [logoPreviewId, setLogoPreviewId] = useState<number|null>(null)
   const [removeLogo, setRemoveLogo] = useState<boolean>(false)
+  const [toggleBusyId, setToggleBusyId] = useState<number|null>(null)
 
   const load = async () => {
     const [cats, list] = await Promise.all([
@@ -127,6 +128,21 @@ export default function DrinksPanel({ sizes, onRefresh }: DrinksPanelProps) {
     await load(); await onRefresh()
   }
 
+  const toggleDisabled = async (drink: Drink) => {
+    setToggleBusyId(drink.id)
+    try {
+      await fetch(`/api/drinks/${drink.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disabled: !(drink.disabled === true) }),
+      })
+      await load()
+      await onRefresh()
+    } finally {
+      setToggleBusyId(null)
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Left column: Categories + Drinks */}
@@ -221,7 +237,19 @@ export default function DrinksPanel({ sizes, onRefresh }: DrinksPanelProps) {
             })
             .map(d => (
             <li key={d.id} className="flex items-center justify-between border rounded px-2 py-1 gap-2 border-neutral-300 dark:border-neutral-800">
-              <span className="truncate">{d.name} — {(categories.find(c=>c.id===d.categoryId)?.name) || 'Uncategorized'}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  type="button"
+                  onClick={()=>toggleDisabled(d)}
+                  disabled={toggleBusyId===d.id}
+                  className={`text-lg transition-opacity text-red-500 ${d.disabled ? 'opacity-100' : 'opacity-30'} ${toggleBusyId===d.id?'cursor-progress':''}`}
+                  title={d.disabled ? 'Hidden from display' : 'Hide this drink on the display'}
+                  aria-pressed={d.disabled ? 'true' : 'false'}
+                >
+                  ⛔️
+                </button>
+                <span className={`truncate ${d.disabled ? 'opacity-60' : ''}`}>{d.name} — {(categories.find(c=>c.id===d.categoryId)?.name) || 'Uncategorized'}</span>
+              </div>
               <div className="flex items-center gap-2">
                 <LoadingButton
                   onClick={()=>openEdit(d.id)}

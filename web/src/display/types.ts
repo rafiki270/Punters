@@ -107,6 +107,7 @@ export type Drink = {
   origin?: string | null
   description?: string | null
   active?: boolean
+  disabled?: boolean
   logoAssetId?: number | null
   prices?: Price[]
 }

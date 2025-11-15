@@ -24,6 +24,7 @@ export const DrinkCreateSchema = z.object({
   origin: z.string().optional(),
   description: z.string().optional(),
   active: z.boolean().optional(),
+  disabled: z.boolean().optional(),
   logoAssetId: z.number().int().nullable().optional(),
 })
 
@@ -84,10 +85,11 @@ export function createDrinksService({ prisma, emitChange }: { prisma: PrismaClie
       }
     },
 
-    listDrinks: (filter: { active?: boolean; categoryId?: number; withPrices?: boolean } = {}) =>
+    listDrinks: (filter: { active?: boolean; disabled?: boolean; categoryId?: number; withPrices?: boolean } = {}) =>
       prisma.drink.findMany({
         where: {
           ...(typeof filter.active === 'boolean' ? { active: filter.active } : {}),
+          ...(typeof filter.disabled === 'boolean' ? { disabled: filter.disabled } : {}),
           ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
         },
         orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
@@ -112,6 +114,7 @@ export function createDrinksService({ prisma, emitChange }: { prisma: PrismaClie
           origin: data.origin,
           description: data.description,
           active: data.active ?? true,
+          disabled: data.disabled ?? false,
           logoAssetId: data.logoAssetId ?? null,
         },
       })

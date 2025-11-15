@@ -53,7 +53,7 @@ export default function useDisplayData(deviceId: number | null) {
         fetch(`${base}/api/display/beerlist`).then(r=>r.json()),
         fetch(`${base}/api/display/ads`).then(r=>r.json()),
         fetch(`${base}/api/drink-categories`).then(r=>r.json()).catch(()=>[]),
-        fetch(`${base}/api/drinks?active=true&withPrices=true`).then(r=>r.json()).catch(()=>[]),
+        fetch(`${base}/api/drinks?active=true&disabled=false&withPrices=true`).then(r=>r.json()).catch(()=>[]),
         fetch(`${base}/api/cocktails?active=true`).then(r=>r.json()).catch(()=>[]),
       ])
       setSettings(s)

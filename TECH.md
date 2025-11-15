@@ -5,6 +5,7 @@ Local-first web app to power taproom TVs with live beer lists and scheduled prom
 ## Current Features
 - Beers & taps: assign beers, kick/clear, keep tap history, and manage sizes with default pricing templates.
 - Cocktails: image + ingredient block + single price with enable/disable toggles, alphabetical list, and dedicated display slides.
+- Other drinks: categorized bottle/can lists, per-size prices, and a stop-icon toggle that flips the `disabled` flag so items vanish from displays without deleting them.
 - Media: upload promo images, order them, control pairing, hide logo/footer per asset, and play them in rotation.
 - Rotation: configurable duration (default 90 s), countdown footer, multi-screen synchronization, per-device display modes (inherit/all/beer/drinks/ads), and per-screen content toggles (beer/drinks/cocktails/media).
 - Display: React/Vite PWA with offline cache, auto-hide admin overlay, optional logo positioning/scaling, and per-device column/item overrides.
@@ -70,6 +71,7 @@ Local-first web app to power taproom TVs with live beer lists and scheduled prom
 - Beers: `GET /api/beers`, `GET /api/beers/search?q=...`, `GET/PUT/DELETE /api/beers/:id`, `GET/PUT /api/beers/:id/prices`
 - Taps: `GET /api/taps`, `PUT /api/taps/config`, `PUT/DELETE /api/taps/:number/assign`, `POST /api/taps/:number/status`, `GET /api/taps/:number/history`
 - Cocktails: `GET /api/cocktails?active=true`, `GET /api/cocktails/:id`, `POST /api/cocktails`, `PUT /api/cocktails/:id`, `DELETE /api/cocktails/:id` (soft-disable)
+- Drinks: `GET /api/drinks?active=true&disabled=false&withPrices=true`, `GET /api/drinks/:id`, `POST /api/drinks`, `PUT /api/drinks/:id`, `DELETE /api/drinks/:id` (soft-delete via `active=false`). The admin stop icon flips `disabled` on/off; disabled drinks stay editable but never appear on the display fetches.
 - Display data:
   - `GET /api/display/beerlist` — assigned beers sorted by tap number (empty taps omitted)
   - `GET /api/display/ads` — ad/media assets (includes hide flags)

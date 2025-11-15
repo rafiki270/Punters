@@ -19,6 +19,7 @@ Punters is a digital beer board for pubs, taprooms, and tasting rooms. It keeps 
 ## Control without leaving the floor
 - Pull up the admin overlay on any display to edit taps, upload media, or tweak layout.
 - Hide the logo or footer per slide to keep promos full-bleed.
+- Run out of a bottle? Tap the stop icon in **Other drinks** to hide it instantly without deleting the record—tap again when it’s back.
 - Pair or unpair images with a click; drag to reorder playlists.
 - Pause or skip slides on-demand for tastings or special announcements.
 
