@@ -9,6 +9,7 @@ export type AppConfig = {
   webDistDir: string
   backgroundsDir: string
   uploadLimitBytes: number
+  displayLogLevel: 'info' | 'debug'
 }
 
 const DEFAULT_UPLOAD_LIMIT = 50 * 1024 * 1024
@@ -17,6 +18,8 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   const nodeEnv = process.env.NODE_ENV || 'development'
   const cwd = process.cwd()
   const webRoot = path.join(cwd, 'web')
+  const displayLogLevelRaw = (process.env.DISPLAY_LOG_LEVEL || 'debug').toLowerCase()
+  const displayLogLevel: 'info' | 'debug' = displayLogLevelRaw === 'info' ? 'info' : 'debug'
 
   const base: AppConfig = {
     nodeEnv,
@@ -27,6 +30,7 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     webDistDir: path.join(webRoot, 'dist'),
     backgroundsDir: path.join(webRoot, 'public', 'bcg'),
     uploadLimitBytes: DEFAULT_UPLOAD_LIMIT,
+    displayLogLevel,
   }
 
   return { ...base, ...overrides }

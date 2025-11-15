@@ -39,11 +39,24 @@ export default function useDisplaySocket({
 }: UseDisplaySocketArgs) {
   const socketRef = useRef<Socket | null>(null)
   const identifyTimer = useRef<number | null>(null)
+  const screenIndexRef = useRef(screenIndex)
+  const screenCountRef = useRef(screenCount)
+  const deviceIdRef = useRef(deviceId)
+  const clientIpRef = useRef<string | undefined>(undefined)
+
+  useEffect(() => { screenIndexRef.current = screenIndex }, [screenIndex])
+  useEffect(() => { screenCountRef.current = screenCount }, [screenCount])
+  useEffect(() => { deviceIdRef.current = deviceId }, [deviceId])
 
   useEffect(() => {
     let url: string | undefined
-    const clientIpRef: { current: string | undefined } = { current: undefined }
-    try { fetch('/api/ip').then(r=>r.json()).then(info=>{ if (info && typeof info.clientIp === 'string') clientIpRef.current = info.clientIp }) } catch {}
+    clientIpRef.current = undefined
+    try {
+      fetch('/api/ip')
+        .then(r=>r.json())
+        .then(info=>{ if (info && typeof info.clientIp === 'string') clientIpRef.current = info.clientIp })
+        .catch(()=>{})
+    } catch {}
     if (mode === 'client' && remoteBase) {
       url = remoteBase
     } else {
@@ -55,6 +68,26 @@ export default function useDisplaySocket({
       } catch {}
     }
     const sock: Socket = io(url || '', { path: '/socket.io', transports: ['websocket', 'polling'], reconnection: true })
+    const registerDisplay = () => {
+      let label: string | undefined
+      try { label = (localStorage.getItem('displayLabel') || undefined) ?? undefined } catch {}
+      let clientId: string | undefined
+      try {
+        clientId = localStorage.getItem('displayClientId') || undefined
+        if (!clientId) {
+          clientId = `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
+          localStorage.setItem('displayClientId', clientId)
+        }
+      } catch {}
+      sock.emit('register_display', {
+        screenIndex: screenIndexRef.current,
+        screenCount: screenCountRef.current,
+        deviceId: deviceIdRef.current,
+        clientIp: clientIpRef.current,
+        label,
+        clientId,
+      })
+    }
     const onChanged = () => { loadAll() }
     const onTick = (p: { epoch: number }) => { if (typeof p?.epoch === 'number') setEpoch(p.epoch) }
     const onSyncState = (p: { cycleOffset?: number; anchorMs?: number|null }) => {
@@ -69,11 +102,7 @@ export default function useDisplaySocket({
       identifyTimer.current = window.setTimeout(() => setIdentify(null), secs*1000)
     }
     const onConnect = () => {
-      try {
-        const label = (()=>{ try { return localStorage.getItem('displayLabel') || undefined } catch { return undefined } })()
-        const clientId = (()=>{ try { let v = localStorage.getItem('displayClientId'); if (!v) { v = `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`; localStorage.setItem('displayClientId', v) } return v } catch { return undefined } })()
-        sock.emit('register_display', { screenIndex, screenCount, deviceId, clientIp: clientIpRef.current, label, clientId })
-      } catch {}
+      try { registerDisplay() } catch {}
     }
     const ipWatcher = window.setInterval(() => {
       try {
@@ -91,11 +120,12 @@ export default function useDisplaySocket({
     sock.on('sync_state', onSyncState)
     sock.on('identify', onIdentify)
     sock.on('reload', () => { try { window.location.reload() } catch {} })
-    sock.on('set_screen', (p: { screenIndex?: number; screenCount?: number }) => {
+    const onSetScreen = (p: { screenIndex?: number; screenCount?: number }) => {
       if (typeof p?.screenIndex === 'number') setScreenIndex(Math.max(1, p.screenIndex))
       if (typeof p?.screenCount === 'number') setScreenCount(Math.max(1, p.screenCount))
-    })
-    sock.on('set_content', (p: { showBeer?: boolean; showDrinks?: boolean; showCocktails?: boolean; showMedia?: boolean }) => {
+    }
+    sock.on('set_screen', onSetScreen)
+    const onSetContent = (p: { showBeer?: boolean; showDrinks?: boolean; showCocktails?: boolean; showMedia?: boolean }) => {
       const showBeer = !!p?.showBeer
       const showDrinks = !!p?.showDrinks
       const showCocktails = !!p?.showCocktails
@@ -104,10 +134,12 @@ export default function useDisplaySocket({
       setLocalDisplayMode(nextMode)
       setLocalShowDrinks(showDrinks)
       setLocalShowCocktails(showCocktails)
-    })
-    sock.on('set_label', (p: { label?: string }) => {
+    }
+    sock.on('set_content', onSetContent)
+    const onSetLabel = (p: { label?: string }) => {
       try { localStorage.setItem('displayLabel', String(p?.label || '')) } catch {}
-    })
+    }
+    sock.on('set_label', onSetLabel)
     socketRef.current = sock
     return () => {
       try {
@@ -117,10 +149,10 @@ export default function useDisplaySocket({
         sock.off('tick', onTick)
         sock.off('sync_state', onSyncState)
         sock.off('identify', onIdentify)
-        sock.off('set_screen', () => {})
-        sock.off('set_content', () => {})
-        sock.off('reload', () => {})
-        sock.off('set_label', () => {})
+        sock.off('reload')
+        sock.off('set_screen', onSetScreen)
+        sock.off('set_content', onSetContent)
+        sock.off('set_label', onSetLabel)
         window.clearInterval(ipWatcher)
         if (identifyTimer.current) {
           window.clearTimeout(identifyTimer.current)
@@ -133,7 +165,7 @@ export default function useDisplaySocket({
       } catch {}
       socketRef.current = null
     }
-  }, [mode, remoteBase, screenIndex, screenCount, deviceId, loadAll, setEpoch, setCycleOffset, setAnchorMs, setIdentify, setScreenIndex, setScreenCount, setLocalDisplayMode, setLocalShowDrinks, setLocalShowCocktails])
+  }, [mode, remoteBase, loadAll, setEpoch, setCycleOffset, setAnchorMs, setIdentify, setScreenIndex, setScreenCount, setLocalDisplayMode, setLocalShowDrinks, setLocalShowCocktails])
 
   return socketRef
 }

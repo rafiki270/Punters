@@ -98,7 +98,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerWebStatic(app, config)
   registerSpaFallback(app, config)
 
-  const { io, displays, state } = setupDisplaySockets(app)
+  const { io, displays, state } = setupDisplaySockets(app, { logLevel: config.displayLogLevel })
   registerDisplayApi(app, io, displays, state)
   bridgeDomainEvents(io)
   startTick(io)
@@ -175,13 +175,18 @@ function registerSpaFallback(app: FastifyInstance, config: AppConfig) {
   })
 }
 
-function setupDisplaySockets(app: FastifyInstance) {
+function setupDisplaySockets(app: FastifyInstance, opts?: { logLevel?: 'info' | 'debug' }) {
   const io = new IOServer(app.server, { cors: { origin: true } })
   const displays = new Map<string, DisplayClient>()
   const state: DisplayState = { cycleOffset: 0, anchorMs: null }
+  const logLevel = opts?.logLevel === 'info' ? 'info' : 'debug'
+  const logDisplayEvent = (payload: Record<string, any>, msg: string) => {
+    if (logLevel === 'info') app.log.info(payload, msg)
+    else app.log.debug(payload, msg)
+  }
 
   io.on('connection', (socket) => {
-    app.log.info({ id: socket.id }, 'socket connected')
+    logDisplayEvent({ id: socket.id }, 'socket connected')
     socket.on('register_display', async (p: { screenIndex?: number; screenCount?: number; deviceId?: number | null; clientIp?: string; label?: string; clientId?: string }) => {
       const fwd = (socket.handshake.headers['x-forwarded-for'] as string | undefined) || (socket.handshake.headers['x-real-ip'] as string | undefined)
       const forwardedIp = fwd ? fwd.split(',')[0].trim() : undefined
@@ -220,7 +225,7 @@ function setupDisplaySockets(app: FastifyInstance) {
       } catch {}
 
       displays.set(socket.id, info)
-      app.log.info({ id: socket.id, info }, 'display registered')
+      logDisplayEvent({ id: socket.id, info }, 'display registered')
 
       if (!info.host && info.address) {
         const ip = info.address.startsWith('::ffff:') ? info.address.slice(7) : info.address
@@ -283,7 +288,7 @@ function setupDisplaySockets(app: FastifyInstance) {
 
     socket.on('unregister_display', () => {
       displays.delete(socket.id)
-      app.log.info({ id: socket.id }, 'display unregistered')
+      logDisplayEvent({ id: socket.id }, 'display unregistered')
     })
 
     socket.emit('sync_state', { cycleOffset: state.cycleOffset, anchorMs: state.anchorMs })
@@ -300,7 +305,7 @@ function setupDisplaySockets(app: FastifyInstance) {
 
     socket.on('disconnect', () => {
       displays.delete(socket.id)
-      app.log.info({ id: socket.id }, 'socket disconnected')
+      logDisplayEvent({ id: socket.id }, 'socket disconnected')
       const countAll = displays.size
       for (const [cid, val] of displays.entries()) {
         const idx = (typeof val.screenIndex === 'number' && val.screenIndex > 0) ? val.screenIndex : 1

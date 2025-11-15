@@ -80,6 +80,7 @@ Local-first web app to power taproom TVs with live beer lists and scheduled prom
 - i18n: `GET /api/i18n/:locale`
 - Auth: `POST /api/auth/set-password`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/status`
 - Admin ops: `POST /api/admin/factory-reset/request`, `POST /api/admin/factory-reset`
+- Logging: set `DISPLAY_LOG_LEVEL=info` to re-enable noisy socket/display connection logs; default `debug` keeps those events at debug level so production logs stay readable.
 
 ### Auth toggle
 - Default: disabled. Enable by calling `POST /api/auth/set-password` with `{ password, confirm }` (must match). When enabled, protected endpoints require `Authorization: Bearer <token>` (from login) or the provided cookie.
