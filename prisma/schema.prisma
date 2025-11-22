@@ -160,6 +160,7 @@ model Asset {
   requireLogo Boolean @default(false)
   // If true, always hide logo overlay for this asset (regardless of fullscreen)
   hideLogo   Boolean @default(false)
+  visible    Boolean @default(true)
   displayOrder Int   @default(0)
   allowPair Boolean  @default(true)
   fullscreen Boolean @default(false)

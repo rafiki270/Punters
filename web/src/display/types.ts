@@ -80,6 +80,7 @@ export type Ad = {
   requireLogo?: boolean
   hideLogo?: boolean
   displayOrder?: number
+  visible?: boolean
 }
 
 export type Device = {

@@ -74,7 +74,7 @@ Local-first web app to power taproom TVs with live beer lists and scheduled prom
 - Drinks: `GET /api/drinks?active=true&disabled=false&withPrices=true`, `GET /api/drinks/:id`, `POST /api/drinks`, `PUT /api/drinks/:id`, `DELETE /api/drinks/:id` (soft-delete via `active=false`). The admin stop icon flips `disabled` on/off; disabled drinks stay editable but never appear on the display fetches.
 - Display data:
   - `GET /api/display/beerlist` — assigned beers sorted by tap number (empty taps omitted)
-  - `GET /api/display/ads` — ad/media assets (includes hide flags)
+  - `GET /api/display/ads` — ad/media assets (includes hide flags; only "Show"-enabled items are returned)
 - Media: `GET /api/assets`, `POST /api/upload` (JPG/PNG), `DELETE /api/assets/:id`, `GET /api/assets/:id/content`
 - Devices: `GET/POST /api/devices`, `PUT/DELETE /api/devices/:id`
 - i18n: `GET /api/i18n/:locale`

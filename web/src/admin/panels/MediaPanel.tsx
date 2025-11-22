@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
-type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; hideLogo?: boolean; displayOrder?: number }
+type Ad = { id: number; filename: string; mimeType: string; width?: number|null; height?: number|null; allowPair?: boolean; fullscreen?: boolean; requireLogo?: boolean; hideLogo?: boolean; displayOrder?: number; visible?: boolean }
 
 function LoadingButton({ onClick, children, className }: { onClick: () => Promise<void> | void; children: React.ReactNode; className?: string }) {
   const [loading, setLoading] = useState(false)
@@ -38,7 +38,7 @@ export default function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
   }
 
   const update = async (a: Ad, patch: Partial<Ad>) => {
-    const res = await fetch(`/api/assets/${a.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ allowPair: patch.allowPair, fullscreen: patch.fullscreen, hideLogo: patch.hideLogo }) })
+    const res = await fetch(`/api/assets/${a.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ allowPair: patch.allowPair, fullscreen: patch.fullscreen, hideLogo: patch.hideLogo, visible: patch.visible }) })
     if (res.ok) {
       const list = await fetch('/api/assets').then(r=>r.json()).catch(()=>[])
       setAssets(list)
@@ -85,6 +85,7 @@ export default function MediaPanel({ onRefresh }: { onRefresh: () => void }) {
               </LoadingButton>
             </div>
             <div className="mt-2 text-xs space-y-1">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={a.visible !== false} onChange={e=>update(a, { visible: e.target.checked })} /> Show</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={a.allowPair !== false} onChange={e=>update(a, { allowPair: e.target.checked })} /> Allow pairing</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={!!a.hideLogo} onChange={e=>update(a, { hideLogo: e.target.checked })} /> Hide logo</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={!!a.fullscreen} onChange={e=>update(a, { fullscreen: e.target.checked })} /> Hide footer</label>

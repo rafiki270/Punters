@@ -94,7 +94,10 @@ export default function useSlides({
         s.push({ type:'cocktails', data: { columns: columnsData } })
       }
     }
-    const adsSorted = ads.slice().sort((a,b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+    const adsSorted = ads
+      .filter(a => a.visible !== false)
+      .slice()
+      .sort((a,b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
     for (let i = 0; i < adsSorted.length; i++) {
       const a = adsSorted[i]
       const next = adsSorted[i+1]
