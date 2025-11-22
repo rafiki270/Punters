@@ -8,6 +8,7 @@ export async function registerDisplayRoutes(app: FastifyInstance) {
     const assets = await prisma.asset.findMany({
       where: {
         type: 'image',
+        visible: true,
         beersWithBadge: { none: {} },
         OR: [
           { tags: null },
@@ -15,7 +16,10 @@ export async function registerDisplayRoutes(app: FastifyInstance) {
           { tags: { notIn: ['style:logo', 'style:background', 'drink:logo', 'cocktail:image'] } },
         ]
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: [
+        { displayOrder: 'asc' },
+        { createdAt: 'desc' },
+      ],
     })
     return assets.map((a: any) => ({
       id: a.id,
@@ -28,6 +32,7 @@ export async function registerDisplayRoutes(app: FastifyInstance) {
       requireLogo: a.requireLogo,
       hideLogo: a.hideLogo,
       displayOrder: a.displayOrder,
+      visible: a.visible,
     }))
   })
 }

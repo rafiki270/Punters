@@ -38,6 +38,7 @@ export function createMediaService({ prisma, emitChange }: MediaServiceDeps) {
             fullscreen: data.fullscreen ?? undefined,
             requireLogo: data.requireLogo ?? undefined,
             hideLogo: data.hideLogo ?? undefined,
+            visible: data.visible ?? undefined,
             displayOrder: data.displayOrder ?? undefined,
           },
         })

@@ -5,6 +5,7 @@ export const AssetUpdateSchema = z.object({
   fullscreen: z.boolean().optional(),
   requireLogo: z.boolean().optional(),
   hideLogo: z.boolean().optional(),
+  visible: z.boolean().optional(),
   displayOrder: z.number().int().optional(),
 })
 

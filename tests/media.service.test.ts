@@ -18,3 +18,19 @@ test('deleteAsset blocks when asset in use', async () => {
   }
   assert.equal(threw, true)
 })
+
+test('updateAsset updates visibility flags and emits change', async () => {
+  let emitted = false
+  const updates: any[] = []
+  const prisma: any = {
+    asset: {
+      update: async ({ data }: any) => { updates.push(data); return { id: 2, ...data } },
+    },
+  }
+  const service = createMediaService({ prisma, emitChange: () => { emitted = true } })
+  const result = await service.updateAsset(2, { allowPair: false, fullscreen: true, hideLogo: true, visible: false })
+
+  assert.equal(emitted, true)
+  assert.equal(updates[0].visible, false)
+  assert.equal(result.visible, false)
+})
