@@ -83,14 +83,15 @@ export default function useSlides({
     if (hasCocktails && allowCocktails) {
       const sorted = (cocktails || []).filter((c:any)=>c && c.active!==false).slice().sort((a:any,b:any)=> String(a.name).localeCompare(String(b.name)))
       const perCol = Math.max(1, effDrinksItemsPerCol)
-      const colCount = Math.max(1, columns)
+      const colCount = Math.max(2, columns)
       const perPage = perCol * colCount
       for (let i=0; i<sorted.length; i+=perPage) {
         const chunk = sorted.slice(i, i+perPage)
-        const columnsData: any[][] = []
-        for (let c=0;c<colCount;c++) {
-          columnsData.push(chunk.slice(c*perCol, (c+1)*perCol))
-        }
+        const columnsData: any[][] = Array.from({ length: colCount }, () => [])
+        chunk.forEach((cocktail:any, idx:number) => {
+          const targetCol = idx % colCount
+          columnsData[targetCol].push(cocktail)
+        })
         s.push({ type:'cocktails', data: { columns: columnsData } })
       }
     }
