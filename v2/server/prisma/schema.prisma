@@ -1,5 +1,8 @@
+// Custom output: npm workspaces hoist node_modules, so without a distinct output path
+// this and the relay's generated client silently clobber each other on `prisma generate`.
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma-client-server"
 }
 
 datasource db {
@@ -19,6 +22,20 @@ model Settings {
   logoAsset         Asset?   @relation("SettingsLogo", fields: [logoAssetId], references: [id])
   backgroundAsset   Asset?   @relation("SettingsBackground", fields: [backgroundAssetId], references: [id])
   updatedAt         DateTime @updatedAt
+
+  // Organisation binding (set once via the venue-bind flow, then immutable — see
+  // AUTH_ARCHITECTURE.md). Null until a signed-in admin has bound this server to a venue.
+  orgId             Int?
+  orgName           String? // cached label; source of truth is the relay
+  teamId            Int?
+  teamName          String?
+  relayServiceToken String? // durable, non-human credential for unattended sync polling
+
+  // Organisation-shared branding, as last pulled from the relay, plus this venue's own
+  // sparse overrides. Effective theme = mergeTheme(orgTheme, themeOverrides).
+  orgTheme          String? // JSON: OrgTheme, as reported by the relay
+  themeOverrides    String? // JSON: OrgTheme, only the field groups this venue customized
+  catalogSyncedVersion Int   @default(0) // last shared-catalog version successfully applied
 }
 
 // A zone is a synchronized group of screens sharing one page rotation.
@@ -98,6 +115,13 @@ model Item {
   prices      Price[]
   taps        Tap[]
   tapHistory  TapAssignment[]
+
+  // Organisation-shared catalog tracking (see AUTH_ARCHITECTURE.md "Sharing model").
+  // sharedItemId is the relay's SharedItem id this item mirrors; null for venue-only items.
+  // overridden = true once a venue edits a mirrored item — sync then leaves it alone.
+  sharedItemId     Int?
+  overridden       Boolean   @default(false)
+  sharedUpdatedAt  DateTime? // upstream `updatedAt` last applied, for idempotent re-pulls
 }
 
 model ServeSize {

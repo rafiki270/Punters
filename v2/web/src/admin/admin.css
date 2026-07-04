@@ -63,3 +63,34 @@
 
 .slot-editor { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
 .slot-editor-head { font-size: var(--fs-xs); font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* auth screens (sign-in / bind-venue) */
+.auth-screen { height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+.auth-card {
+  width: 320px; padding: 28px 24px; background: var(--bg-raised); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center;
+}
+.auth-card.wide { width: 420px; text-align: left; align-items: stretch; }
+.auth-brand {
+  width: 44px; height: 44px; border-radius: 12px; background: var(--accent); color: var(--accent-ink);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 22px; align-self: center;
+}
+.auth-card h1 { font-size: 18px; margin: 0; text-align: center; }
+.auth-card.wide h1 { text-align: left; }
+
+.venue-list { display: flex; flex-direction: column; gap: 6px; }
+.venue-row {
+  display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px;
+  background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.venue-row:hover { border-color: var(--accent); }
+
+/* shared-catalog badge (Menu panel) */
+.shared-badge {
+  display: inline-flex; align-items: center; height: 16px; padding: 0 6px; margin-left: 6px;
+  border-radius: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.shared-badge.overridden { background: var(--bg-inset); color: var(--text-faint); border-color: var(--border); }

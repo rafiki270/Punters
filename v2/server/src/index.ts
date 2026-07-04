@@ -1,5 +1,6 @@
 import { buildApp } from './app'
 import { attachSockets } from './core/sockets'
+import { startSync } from './modules/sync/service'
 
 const PORT = Number(process.env.PORT ?? 4000)
 const HOST = process.env.HOST ?? '0.0.0.0'
@@ -7,6 +8,8 @@ const HOST = process.env.HOST ?? '0.0.0.0'
 async function main() {
   const app = await buildApp()
   attachSockets(app)
+  const stopSync = startSync()
+  app.addHook('onClose', async () => stopSync())
   await app.listen({ port: PORT, host: HOST })
   app.log.info(`Punters v2 on http://localhost:${PORT} (display: / — admin: /admin)`)
 }

@@ -4,15 +4,19 @@
   "version": "2.0.0",
   "workspaces": [
     "shared",
+    "relay",
     "server",
     "web"
   ],
   "scripts": {
     "dev": "npm run dev --workspace server & npm run dev --workspace web & wait",
+    "dev:relay": "npm run dev --workspace relay",
     "build": "npm run build --workspace web",
     "start": "npm run start --workspace server",
-    "test": "npm run test --workspace shared && npm run test --workspace server",
+    "start:relay": "npm run start --workspace relay",
+    "test": "npm run test --workspace shared && npm run test --workspace relay && npm run test --workspace server",
     "db:push": "npm run db:push --workspace server",
-    "db:seed": "npm run db:seed --workspace server"
+    "db:seed": "npm run db:seed --workspace server",
+    "relay:db:push": "npm run db:push --workspace relay"
   }
 }

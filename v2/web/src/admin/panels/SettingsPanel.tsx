@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api'
-import type { AdminSettings, AdminSize } from '../../types'
+import type { AdminSettings, AdminSize, OrgTheme } from '../../types'
 import { Field, NumberBox, useToast } from '../../ui/components'
 import { AssetPicker } from '../AssetPicker'
-import { KINDS } from '@punters/shared'
+import { KINDS, mergeTheme } from '@punters/shared'
+import { OrgCatalog } from '../OrgCatalog'
 
 export function SettingsPanel() {
   const [settings, setSettings] = useState<AdminSettings | null>(null)
@@ -24,7 +25,9 @@ export function SettingsPanel() {
     load().catch((e) => show(e.message, true))
   }, [load, show])
 
-  async function patch(body: Partial<AdminSettings>) {
+  // themeOverrides is a plain object on the wire (the server stringifies it for storage)
+  // even though AdminSettings reports it back as the stored JSON string.
+  async function patch(body: Partial<Omit<AdminSettings, 'themeOverrides'>> & { themeOverrides?: OrgTheme | null }) {
     try {
       const res = await api.put<{ settings: AdminSettings }>('/api/settings', body)
       setSettings(res.settings)
@@ -45,9 +48,61 @@ export function SettingsPanel() {
 
   if (!settings) return <div className="admin-page faint">Loading…</div>
 
+  const orgTheme: OrgTheme = settings.orgTheme ? JSON.parse(settings.orgTheme) : {}
+  const overrides: OrgTheme | null = settings.themeOverrides ? JSON.parse(settings.themeOverrides) : null
+  const customizing = !!overrides?.colors
+  const effective = mergeTheme(orgTheme, overrides)
+
+  function setCustomPrimary(color: string) {
+    patch({ themeOverrides: { ...overrides, colors: { ...effective.colors, primary: color } } })
+  }
+  function toggleCustomize(on: boolean) {
+    if (on) patch({ themeOverrides: { ...overrides, colors: { ...effective.colors } } })
+    else patch({ themeOverrides: { ...overrides, colors: undefined } })
+  }
+
   return (
     <div className="admin-page">
       <div className="admin-page-title">Settings</div>
+
+      {settings.orgId && (
+        <div className="panel">
+          <div className="panel-head">Organisation</div>
+          <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="form-grid">
+              <Field label="Organisation"><div className="input" style={{ display: 'flex', alignItems: 'center', background: 'transparent', border: 'none', padding: 0 }}>{settings.orgName}</div></Field>
+              <Field label="This venue"><div className="input" style={{ display: 'flex', alignItems: 'center', background: 'transparent', border: 'none', padding: 0 }}>{settings.teamName}</div></Field>
+            </div>
+            <div>
+              <label className="check">
+                <input type="checkbox" checked={customizing} onChange={(e) => toggleCustomize(e.target.checked)} />
+                Customize brand colour for this venue
+              </label>
+              {customizing ? (
+                <div className="form-row" style={{ marginTop: 6 }}>
+                  <Field label="Primary colour">
+                    <input
+                      className="input w-sm"
+                      type="color"
+                      value={effective.colors?.primary ?? '#f5a524'}
+                      onChange={(e) => setCustomPrimary(e.target.value)}
+                    />
+                  </Field>
+                </div>
+              ) : (
+                <div className="faint" style={{ marginTop: 4 }}>
+                  Using the organisation's colour ({orgTheme.colors?.primary ?? 'default'}). Menu items shared from the
+                  organisation stay in sync automatically — editing one locally unlinks just that item.
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="field" style={{ marginBottom: 6 }}><label>Shared menu</label></div>
+              <OrgCatalog />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="panel">
         <div className="panel-head">Venue</div>

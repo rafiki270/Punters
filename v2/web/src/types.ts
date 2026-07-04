@@ -1,4 +1,4 @@
-import type { AssetUrls, ItemKind } from '@punters/shared'
+import type { AssetUrls, ItemKind, OrgTheme } from '@punters/shared'
 
 /** Admin-side API row shapes (Prisma rows serialized over JSON). */
 
@@ -44,6 +44,8 @@ export interface AdminItem {
   badgeAssetId: number | null
   active: boolean
   prices: AdminPrice[]
+  sharedItemId: number | null
+  overridden: boolean
 }
 
 export interface AdminTap {
@@ -107,4 +109,55 @@ export interface AdminSettings {
   theme: 'dark' | 'light'
   logoAssetId: number | null
   backgroundAssetId: number | null
+  orgId: number | null
+  orgName: string | null
+  teamId: number | null
+  teamName: string | null
+  orgTheme: string | null
+  themeOverrides: string | null
+}
+
+// ---------------------------------------------------------------- auth
+
+export interface AuthMe {
+  authenticated: boolean
+  venueBound: boolean
+  user?: { sub: string; email: string }
+  org?: { id: number; name: string } | null
+  team?: { id: number; name: string } | null
+}
+
+export interface RelayMembershipOrg {
+  orgId: number
+  orgName: string
+  orgRole: string
+}
+
+export interface RelayMembershipTeam {
+  orgId: number
+  orgName: string
+  teamId: number
+  teamName: string
+  teamRole: string | null
+}
+
+export interface RelayMemberships {
+  orgs: RelayMembershipOrg[]
+  teams: RelayMembershipTeam[]
+  canCreateOrg: boolean
+}
+
+export type { OrgTheme }
+
+export interface OrgSharedItem {
+  id: number
+  kind: string
+  name: string
+  producer: string | null
+  style: string | null
+  abv: number | null
+  description: string | null
+  categoryName: string | null
+  active: boolean
+  prices: { sizeName: string | null; amountMinor: number }[]
 }

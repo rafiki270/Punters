@@ -9,13 +9,17 @@
 - [x] Server: Fastify 5 + Prisma, unified catalog (beer/cider/wine/spirit/cocktail/soft/hot/food), zones/screens/pages, taps workflow ported from v1, resolved display feed, Socket.IO sync
 - [x] Media pipeline: sharp WebP renditions (thumb/sm/md/lg) with reference-guarded deletes
 - [x] Web: display engine (generic template renderer, auto-fit menus, sub-pagination, ads rotator), compact admin (Taps, Menu, Pages + template gallery, Screens & zones with pair codes, Media, Settings)
+- [x] Auth: relay service (`v2/relay/`) integrating UnlikeOtherAuthenticator — config JWT/JWKS, PKCE login, one-time ticket handoff to each venue's local server, stateless session verification (see `v2/AUTH_ARCHITECTURE.md`)
+- [x] Organisations & venues: sign-in gate, one-time venue-bind flow (pick existing venue or create org+venue), immutable per-server binding
+- [x] Cross-venue sharing: organisation-wide theme (colours/fonts/logo, per-venue override) and shared menu catalog (live sync, per-item unlink-on-edit) via a ~20s poll loop
+- [x] Verified live end-to-end with a real browser against a fake-UOA double (real onboarding needs a one-time human approval step against the real service — see `v2/relay/README.md`)
 - [ ] Per-screen layout overrides within a zone (offset/span for video-wall style continuation)
 - [ ] Drag-and-drop page reordering and playlist duplication across zones
 - [ ] Display preview thumbnails inside the Pages panel (live mini render per page)
-- [ ] Auth (admin PIN) and per-device kiosk lockdown
+- [ ] Push-based catalog sync (Socket.IO relay→venue) instead of polling
 - [ ] Scheduling: day-parting (breakfast/lunch/dinner playlists, happy-hour windows)
 - [ ] Migration tool: import v1 SQLite data into v2
-- [ ] Packaging: Dockerfile + Pi kiosk script for v2
+- [ ] Packaging: Dockerfile + Pi kiosk script for v2 (server) and relay deployment guide
 
 This file mirrors the working plan so we can track progress in Git. Check items off as we complete them and adjust as scope evolves.
 

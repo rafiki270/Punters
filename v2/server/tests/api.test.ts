@@ -4,6 +4,8 @@ import { execSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { generateKeyPair } from 'jose'
+import { buildFakeRelay } from './fakeRelay'
 
 // Point Prisma at a scratch database before anything imports the client.
 const dir = mkdtempSync(path.join(tmpdir(), 'punters-v2-test-'))
@@ -17,22 +19,37 @@ execSync('npx prisma db push --skip-generate', {
   stdio: 'ignore',
 })
 
+// A signed-in, bound venue is the normal case this suite exercises — the sign-in chain
+// itself (login, binding, sync) is covered by relay/tests. Stand up a fake relay JWKS
+// endpoint so the server's real session-verification code path runs unmodified.
+const { publicKey, privateKey } = await generateKeyPair('RS256', { modulusLength: 2048, extractable: true })
+const fakeRelay = await buildFakeRelay(privateKey, publicKey, 'test-session-kid')
+process.env.RELAY_URL = fakeRelay.url
+
 const { buildApp } = await import('../src/app')
 const { prisma } = await import('../src/core/prisma')
 
 const app = await buildApp()
+const sessionToken = await fakeRelay.mintSessionToken('user_1', 'owner@example.com')
+const sessionCookie = `punters_session=${sessionToken}`
 
 before(async () => {
   await app.ready()
+  await prisma.settings.upsert({
+    where: { id: 1 },
+    update: { orgId: 1, orgName: 'Test Org', teamId: 1, teamName: 'Test Venue', relayServiceToken: 'vst_test' },
+    create: { id: 1, orgId: 1, orgName: 'Test Org', teamId: 1, teamName: 'Test Venue', relayServiceToken: 'vst_test' },
+  })
 })
 
 after(async () => {
   await app.close()
+  await fakeRelay.app.close()
   await prisma.$disconnect()
 })
 
 async function json(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: unknown) {
-  const res = await app.inject({ method, url, payload: payload as never })
+  const res = await app.inject({ method, url, payload: payload as never, headers: { cookie: sessionCookie } })
   return { status: res.statusCode, body: res.json() }
 }
 

@@ -72,6 +72,11 @@ export function ItemsPanel() {
                     <td>
                       <div style={{ opacity: item.active ? 1 : 0.45 }}>
                         <strong>{item.name}</strong>
+                        {item.sharedItemId && (
+                          <span className={`shared-badge${item.overridden ? ' overridden' : ''}`}>
+                            {item.overridden ? 'unlinked' : 'shared'}
+                          </span>
+                        )}
                         <div className="faint">
                           {[item.producer, item.style, item.category?.name, item.abv != null ? `${item.abv}%` : null].filter(Boolean).join(' · ') || '—'}
                         </div>
@@ -165,6 +170,10 @@ function ItemEditor({
 
   async function save() {
     if (!name.trim()) return onError('Name is required')
+    if (item?.sharedItemId && !item.overridden) {
+      const ok = confirm('This will unlink the item from the Organisation catalog — you’ll manage it locally and won’t receive future organisation-wide updates. Continue?')
+      if (!ok) return
+    }
     const priceRows = [
       { sizeId: null as number | null, amountMinor: prices['single'] ? parseMoney(prices['single']) : null },
       ...sizes.map((s) => ({
@@ -216,10 +225,32 @@ function ItemEditor({
     <div className="panel">
       <div className="panel-head">
         {item ? `Edit ${meta.label.toLowerCase()}` : `New ${meta.label.toLowerCase()}`}
+        {item?.sharedItemId && (
+          <span className={`shared-badge${item.overridden ? ' overridden' : ''}`}>
+            {item.overridden ? 'unlinked from organisation' : 'from organisation'}
+          </span>
+        )}
         <span className="spacer" />
         <label className="check">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Visible on displays
         </label>
+        {item?.sharedItemId && !item.overridden && (
+          <button
+            className="btn ghost sm"
+            title="Stop receiving organisation-wide updates for this item"
+            onClick={async () => {
+              if (!confirm('Unlink this item from the Organisation catalog? You’ll manage it locally from now on, and it won’t receive future organisation-wide updates.')) return
+              try {
+                await api.post(`/api/items/${item.id}/unlink`)
+                onSaved(item.id)
+              } catch (e) {
+                onError((e as Error).message)
+              }
+            }}
+          >
+            Unlink
+          </button>
+        )}
         {item && (
           <button
             className="btn danger sm"

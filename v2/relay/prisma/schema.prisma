@@ -1,0 +1,145 @@
+// Custom output: npm workspaces hoist node_modules, so without a distinct output path
+// this and the server's generated client silently clobber each other on `prisma generate`.
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma-client-relay"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Mirror of a UOA user, keyed by their stable external id (JWT `sub`).
+model User {
+  id            Int            @id @default(autoincrement())
+  uoaSub        String         @unique
+  email         String
+  createdAt     DateTime       @default(now())
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+}
+
+// The tenant that owns shared branding + shared catalog. Maps to a UOA organisation.
+model Organisation {
+  id             Int              @id @default(autoincrement())
+  uoaOrgId       String           @unique
+  name           String
+  themeColors    String? // JSON: Record<string,string>
+  themeFonts     String? // JSON: { fontFamily?, importUrl? }
+  themeLogoUrl   String?
+  catalogVersion Int              @default(0) // bumped on every shared-catalog write
+  createdAt      DateTime         @default(now())
+  teams          Team[]
+  memberships    Membership[]
+  categories     SharedCategory[]
+  items          SharedItem[]
+}
+
+// A venue. Maps to a UOA team where one exists; see AUTH_ARCHITECTURE.md for the
+// documented-API gap this works around when UOA has no matching team yet.
+model Team {
+  id             Int                 @id @default(autoincrement())
+  uoaTeamId      String              @unique
+  uoaLinked      Boolean             @default(true) // false = synthetic id, no real UOA team yet
+  organisationId Int
+  organisation   Organisation        @relation(fields: [organisationId], references: [id])
+  name           String
+  createdAt      DateTime            @default(now())
+  memberships    Membership[]
+  serviceTokens  VenueServiceToken[]
+}
+
+model Membership {
+  id             Int          @id @default(autoincrement())
+  userId         Int
+  user           User         @relation(fields: [userId], references: [id])
+  organisationId Int
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  teamId         Int?
+  team           Team?        @relation(fields: [teamId], references: [id])
+  orgRole        String // owner | admin | member
+  teamRole       String?
+
+  @@unique([userId, organisationId, teamId])
+}
+
+// UOA refresh tokens are server-side only, ever. Revoking bumps UOA's per-user token
+// version, so we just need to know which venues/browsers are covered by which token.
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// Short-lived PKCE state for the relay's own /login/start -> UOA -> /auth/callback hop.
+model PkceState {
+  id           String   @id
+  codeVerifier String
+  returnTo     String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+}
+
+// One-time opaque handoff from the relay's browser callback to the venue's local server,
+// so the signed session JWT never appears in a URL or browser history.
+model LoginTicket {
+  id          String   @id
+  sessionJwt  String
+  redeemed    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+}
+
+// Durable, non-human credential a venue's local server uses to poll the relay
+// unattended (catalog/theme sync), independent of any browser session's lifetime.
+model VenueServiceToken {
+  id        Int       @id @default(autoincrement())
+  teamId    Int
+  team      Team      @relation(fields: [teamId], references: [id])
+  token     String    @unique
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+}
+
+model SharedCategory {
+  id             Int          @id @default(autoincrement())
+  organisationId Int
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  kind           String
+  name           String
+  displayOrder   Int          @default(0)
+  updatedAt      DateTime     @updatedAt
+  items          SharedItem[]
+
+  @@unique([organisationId, kind, name])
+}
+
+// The organisation-wide catalog venues mirror locally. Kept as one flat table (not a
+// full relational mirror of the venue schema) since the relay only needs to move data,
+// not query it richly — `prices` is a JSON blob of { sizeName, amountMinor }[].
+model SharedItem {
+  id             Int             @id @default(autoincrement())
+  organisationId Int
+  organisation   Organisation    @relation(fields: [organisationId], references: [id])
+  kind           String
+  name           String
+  producer       String?
+  style          String?
+  abv            Float?
+  description    String?
+  categoryId     Int?
+  category       SharedCategory? @relation(fields: [categoryId], references: [id])
+  vegan          Boolean         @default(false)
+  vegetarian     Boolean         @default(false)
+  glutenFree     Boolean         @default(false)
+  dairyFree      Boolean         @default(false)
+  spicyLevel     Int             @default(0)
+  imageUrl       String?
+  prices         String          @default("[]") // JSON: SharedPrice[]
+  active         Boolean         @default(true)
+  updatedAt      DateTime        @updatedAt
+}

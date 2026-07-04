@@ -78,10 +78,22 @@ export async function catalogRoutes(app: FastifyInstance) {
     const id = Number((req.params as { id: string }).id)
     const body = itemSchema.partial().parse(req.body)
     const { prices, ...data } = body
-    await prisma.item.update({ where: { id }, data })
+    const existing = await prisma.item.findUnique({ where: { id } })
+    // Editing a shared item forks it: it stops receiving organisation-wide sync updates
+    // from this point on (see AUTH_ARCHITECTURE.md's "Sharing model").
+    const forking = !!existing?.sharedItemId && !existing.overridden
+    await prisma.item.update({ where: { id }, data: forking ? { ...data, overridden: true } : data })
     if (prices) await writePrices(id, prices)
     emitChange('catalog')
     return { item: await prisma.item.findUnique({ where: { id }, include: ITEM_INCLUDE }) }
+  })
+
+  // Unlink without editing: same effect (stop syncing) with no field changes.
+  app.post('/api/items/:id/unlink', async (req) => {
+    const id = Number((req.params as { id: string }).id)
+    const item = await prisma.item.update({ where: { id }, data: { overridden: true }, include: ITEM_INCLUDE })
+    emitChange('catalog')
+    return { item }
   })
 
   app.delete('/api/items/:id', async (req) => {
