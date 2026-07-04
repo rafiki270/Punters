@@ -33,6 +33,22 @@ export async function buildFakeUoa(firstLogin?: Record<string, unknown>) {
 
   app.post('/auth/revoke', async () => ({ ok: true }))
 
+  app.post('/config/validate', async (req) => {
+    const { config_url } = req.body as { config_url?: string }
+    if (!config_url) return { ok: false, checks: [], issues: [{ stage: 'source', code: 'MISSING_CONFIG_URL', summary: 'config_url required' }] }
+    const res = await fetch(config_url)
+    const ok = res.ok && res.headers.get('content-type')?.includes('application/jwt')
+    return {
+      ok,
+      checks: [
+        { stage: 'fetch', ok: res.ok },
+        { stage: 'schema', ok },
+      ],
+      issues: ok ? [] : [{ stage: 'fetch', code: 'CONFIG_FETCH_FAILED', summary: `unexpected response from ${config_url}` }],
+      recommendations: [],
+    }
+  })
+
   await app.listen({ port: 0, host: '127.0.0.1' })
   const address = app.server.address()
   const port = typeof address === 'object' && address ? address.port : 0

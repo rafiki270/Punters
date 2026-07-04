@@ -35,7 +35,7 @@ export async function sessionSigningKey(): Promise<{ key: KeyLike; kid: string }
 const PRIVATE_JWK_FIELDS = ['d', 'p', 'q', 'dp', 'dq', 'qi', 'oth'] as const
 
 export async function publicJwk(privateKey: KeyLike, kid: string) {
-  const jwk = (await exportJWK(privateKey)) as Record<string, unknown>
+  const jwk = (await exportJWK(privateKey)) as unknown as Record<string, unknown>
   for (const field of PRIVATE_JWK_FIELDS) delete jwk[field]
   return { ...jwk, kid, alg: 'RS256', use: 'sig' }
 }

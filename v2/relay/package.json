@@ -9,6 +9,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "keys:generate": "tsx scripts/generate-keys.ts",
+    "onboarding:trigger": "tsx scripts/trigger-onboarding.ts",
+    "onboarding:check": "tsx scripts/trigger-onboarding.ts --check-only",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
