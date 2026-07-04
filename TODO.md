@@ -1,5 +1,22 @@
 # TODO / Project Plan
 
+> **Punters v2 rewrite in progress** — see `v2/` (architecture in `v2/ARCHITECTURE.md`,
+> roadmap below in the v2 section). The v1 app below keeps running until v2 reaches parity.
+
+## v2 (ground-up rewrite in `v2/`)
+- [x] Architecture: modular workspaces (shared / server / web), template-driven pages
+- [x] Shared: 30-template registry, deterministic rotation scheduler, min/max autofit math (unit-tested)
+- [x] Server: Fastify 5 + Prisma, unified catalog (beer/cider/wine/spirit/cocktail/soft/hot/food), zones/screens/pages, taps workflow ported from v1, resolved display feed, Socket.IO sync
+- [x] Media pipeline: sharp WebP renditions (thumb/sm/md/lg) with reference-guarded deletes
+- [x] Web: display engine (generic template renderer, auto-fit menus, sub-pagination, ads rotator), compact admin (Taps, Menu, Pages + template gallery, Screens & zones with pair codes, Media, Settings)
+- [ ] Per-screen layout overrides within a zone (offset/span for video-wall style continuation)
+- [ ] Drag-and-drop page reordering and playlist duplication across zones
+- [ ] Display preview thumbnails inside the Pages panel (live mini render per page)
+- [ ] Auth (admin PIN) and per-device kiosk lockdown
+- [ ] Scheduling: day-parting (breakfast/lunch/dinner playlists, happy-hour windows)
+- [ ] Migration tool: import v1 SQLite data into v2
+- [ ] Packaging: Dockerfile + Pi kiosk script for v2
+
 This file mirrors the working plan so we can track progress in Git. Check items off as we complete them and adjust as scope evolves.
 
 ## Backend

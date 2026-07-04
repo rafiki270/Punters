@@ -1,0 +1,110 @@
+import type { AssetUrls, ItemKind } from '@punters/shared'
+
+/** Admin-side API row shapes (Prisma rows serialized over JSON). */
+
+export interface AdminCategory {
+  id: number
+  kind: ItemKind
+  name: string
+  displayOrder: number
+  active: boolean
+}
+
+export interface AdminSize {
+  id: number
+  name: string
+  volumeMl: number | null
+  displayOrder: number
+  kinds: string
+}
+
+export interface AdminPrice {
+  id: number
+  sizeId: number | null
+  amountMinor: number
+  size: AdminSize | null
+}
+
+export interface AdminItem {
+  id: number
+  kind: ItemKind
+  name: string
+  producer: string | null
+  style: string | null
+  abv: number | null
+  description: string | null
+  categoryId: number | null
+  category: AdminCategory | null
+  vegan: boolean
+  vegetarian: boolean
+  glutenFree: boolean
+  dairyFree: boolean
+  spicyLevel: number
+  imageAssetId: number | null
+  badgeAssetId: number | null
+  active: boolean
+  prices: AdminPrice[]
+}
+
+export interface AdminTap {
+  number: number
+  status: 'on' | 'off' | 'kicked'
+  itemId: number | null
+  item: AdminItem | null
+  notes: string | null
+}
+
+export interface AdminAsset {
+  id: number
+  purpose: string
+  tag: string | null
+  originalName: string
+  mime: string
+  width: number | null
+  height: number | null
+  sizeBytes: number
+  urls: AssetUrls
+  optimizedBytes: number
+}
+
+export interface AdminScreen {
+  id: number
+  key: string
+  pairCode: string | null
+  name: string
+  zoneId: number | null
+  zone: AdminZone | null
+  outputIndex: number
+  width: number | null
+  height: number | null
+  lastSeenAt: string | null
+}
+
+export interface AdminPage {
+  id: number
+  zoneId: number
+  name: string
+  templateId: string
+  durationSec: number
+  sortOrder: number
+  active: boolean
+  config: string
+}
+
+export interface AdminZone {
+  id: number
+  name: string
+  rotationMode: 'zone' | 'screen'
+  screens?: AdminScreen[]
+  pages?: AdminPage[]
+}
+
+export interface AdminSettings {
+  id: number
+  venueName: string
+  currency: string
+  locale: string
+  theme: 'dark' | 'light'
+  logoAssetId: number | null
+  backgroundAssetId: number | null
+}

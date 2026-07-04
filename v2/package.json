@@ -1,0 +1,18 @@
+{
+  "name": "punters-v2",
+  "private": true,
+  "version": "2.0.0",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace server & npm run dev --workspace web & wait",
+    "build": "npm run build --workspace web",
+    "start": "npm run start --workspace server",
+    "test": "npm run test --workspace shared && npm run test --workspace server",
+    "db:push": "npm run db:push --workspace server",
+    "db:seed": "npm run db:seed --workspace server"
+  }
+}

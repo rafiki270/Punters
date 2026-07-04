@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Singleton (id = 1): venue-wide settings.
+model Settings {
+  id                Int      @id
+  venueName         String   @default("Punters")
+  currency          String   @default("GBP")
+  locale            String   @default("en-GB")
+  theme             String   @default("dark") // 'dark' | 'light'
+  logoAssetId       Int?
+  backgroundAssetId Int?
+  logoAsset         Asset?   @relation("SettingsLogo", fields: [logoAssetId], references: [id])
+  backgroundAsset   Asset?   @relation("SettingsBackground", fields: [backgroundAssetId], references: [id])
+  updatedAt         DateTime @updatedAt
+}
+
+// A zone is a synchronized group of screens sharing one page rotation.
+model Zone {
+  id            Int      @id @default(autoincrement())
+  name          String
+  rotationMode  String   @default("zone") // 'zone' (lockstep) | 'screen' (independent)
+  rotationSince DateTime @default(now()) // sync epoch; reset when the playlist changes
+  screens       Screen[]
+  pages         Page[]
+}
+
+// A physical output. One device with N outputs registers N screens.
+model Screen {
+  id          Int       @id @default(autoincrement())
+  key         String    @unique // stable client identity (localStorage)
+  pairCode    String? // shown on the TV until claimed into a zone
+  name        String    @default("New screen")
+  zoneId      Int?
+  zone        Zone?     @relation(fields: [zoneId], references: [id])
+  outputIndex Int       @default(1)
+  width       Int?
+  height      Int?
+  orientation String? // 'landscape' | 'portrait'
+  lastSeenAt  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+// One entry in a zone's rotation: a template plus per-slot configuration.
+model Page {
+  id          Int     @id @default(autoincrement())
+  zoneId      Int
+  zone        Zone    @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  name        String
+  templateId  String
+  durationSec Int     @default(20)
+  sortOrder   Int     @default(0)
+  active      Boolean @default(true)
+  config      String  @default("{}") // JSON: { [slotId]: SlotConfig }
+}
+
+model Category {
+  id           Int     @id @default(autoincrement())
+  kind         String // ItemKind this category belongs to
+  name         String
+  displayOrder Int     @default(0)
+  active       Boolean @default(true)
+  items        Item[]
+
+  @@unique([kind, name])
+}
+
+// Unified catalog item: beers, wines, cocktails, food — one table, kind-discriminated.
+model Item {
+  id          Int       @id @default(autoincrement())
+  kind        String
+  name        String
+  producer    String? // brewery / winery / brand
+  style       String? // IPA / Malbec / single malt
+  abv         Float?
+  description String?
+  categoryId  Int?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  vegan       Boolean   @default(false)
+  vegetarian  Boolean   @default(false)
+  glutenFree  Boolean   @default(false)
+  dairyFree   Boolean   @default(false)
+  spicyLevel  Int       @default(0) // 0..3
+  imageAssetId Int?
+  imageAsset  Asset?    @relation("ItemImage", fields: [imageAssetId], references: [id])
+  badgeAssetId Int?
+  badgeAsset  Asset?    @relation("ItemBadge", fields: [badgeAssetId], references: [id])
+  active      Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  prices      Price[]
+  taps        Tap[]
+  tapHistory  TapAssignment[]
+}
+
+model ServeSize {
+  id           Int     @id @default(autoincrement())
+  name         String  @unique
+  volumeMl     Int?
+  displayOrder Int     @default(0)
+  kinds        String  @default("beer,cider") // csv of ItemKind this size applies to
+  prices       Price[]
+}
+
+// (item, size) price grid; a null size is the item's single price.
+model Price {
+  id          Int        @id @default(autoincrement())
+  itemId      Int
+  item        Item       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  sizeId      Int?
+  size        ServeSize? @relation(fields: [sizeId], references: [id])
+  amountMinor Int
+
+  @@unique([itemId, sizeId])
+}
+
+// Taps: ported from v1 — numeric taps, live item, full assignment history.
+model Tap {
+  number Int     @id
+  status String  @default("on") // 'on' | 'off' | 'kicked'
+  itemId Int?
+  item   Item?   @relation(fields: [itemId], references: [id])
+  notes  String?
+}
+
+model TapAssignment {
+  id            Int       @id @default(autoincrement())
+  tapNumber     Int
+  itemId        Int
+  item          Item      @relation(fields: [itemId], references: [id])
+  assignedAt    DateTime  @default(now())
+  removedAt     DateTime?
+  removedReason String? // 'replaced' | 'cleared' | 'kicked'
+}
+
+// Uploaded media. Binary data lives on disk under data/media/<id>/ as WebP renditions.
+model Asset {
+  id           Int            @id @default(autoincrement())
+  purpose      String         @default("media") // 'media' | 'item' | 'badge' | 'logo' | 'background'
+  tag          String?
+  originalName String
+  mime         String
+  width        Int?
+  height       Int?
+  sizeBytes    Int
+  createdAt    DateTime       @default(now())
+  variants     AssetVariant[]
+  itemImages   Item[]         @relation("ItemImage")
+  itemBadges   Item[]         @relation("ItemBadge")
+  settingsLogo Settings[]     @relation("SettingsLogo")
+  settingsBackground Settings[] @relation("SettingsBackground")
+}
+
+model AssetVariant {
+  id        Int    @id @default(autoincrement())
+  assetId   Int
+  asset     Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  label     String // 'thumb' | 'sm' | 'md' | 'lg' | 'orig'
+  format    String // 'webp' | original extension
+  width     Int
+  height    Int
+  sizeBytes Int
+  fileName  String // relative to data/media/<assetId>/
+
+  @@unique([assetId, label])
+}

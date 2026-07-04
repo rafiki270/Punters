@@ -1,0 +1,136 @@
+/* ---------- display surface ---------- */
+.display-root {
+  position: fixed; inset: 0; overflow: hidden;
+  background: #05070a; color: #f2f6fa;
+  font-family: var(--font);
+}
+.display-root[data-theme='light'] { background: #f4f1ea; color: #1c1a16; }
+
+.display-footer {
+  position: absolute; right: 18px; bottom: 12px;
+  font-size: 13px; opacity: 0.5; letter-spacing: 0.02em;
+}
+
+.display-center {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 18px; text-align: center;
+}
+.display-center-title { font-size: 5vmin; font-weight: 700; letter-spacing: 0.01em; }
+.display-center-body { font-size: 2.2vmin; opacity: 0.65; }
+.display-pair-code {
+  font-family: ui-monospace, monospace; font-size: 11vmin; font-weight: 700;
+  letter-spacing: 0.28em; padding: 1.5vmin 4vmin 1.5vmin 4.3vmin;
+  border: 3px solid #f5a524; border-radius: 16px; color: #f5a524;
+}
+
+/* ---------- template grid ---------- */
+.tpl-grid {
+  display: grid; width: 100%; height: 100%;
+  padding: 2.2vmin; gap: 2.2vmin;
+}
+.tpl-slot { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+
+.slot-empty {
+  height: 100%; display: flex; align-items: center; justify-content: center;
+  border: 2px dashed rgba(128, 144, 160, 0.25); border-radius: 12px;
+  color: rgba(128, 144, 160, 0.6); font-size: 1.8vmin;
+}
+
+/* ---------- menu slot ---------- */
+.menu-slot { height: 100%; display: flex; flex-direction: column; }
+.menu-title {
+  font-size: 2.6vmin; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em;
+  color: #f5a524; margin-bottom: 1.2vmin;
+}
+.menu-region { flex: 1; min-height: 0; }
+.menu-columns { display: flex; height: 100%; }
+.menu-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.menu-cat {
+  display: flex; align-items: flex-end; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.12em; color: #f5a524; font-size: 0.85em;
+  border-bottom: 2px solid rgba(245, 165, 36, 0.35); padding-bottom: 0.35em;
+}
+.display-root[data-theme='light'] .menu-cat { color: #a86e00; border-bottom-color: rgba(168, 110, 0, 0.3); }
+
+.menu-row { display: flex; align-items: center; gap: 0.6em; min-width: 0; }
+.tap-no {
+  flex: none; width: 1.7em; height: 1.7em; display: flex; align-items: center; justify-content: center;
+  background: #f5a524; color: #241703; font-weight: 800; border-radius: 0.4em; font-size: 0.85em;
+}
+.row-badge { flex: none; height: 82%; aspect-ratio: 1; object-fit: contain; border-radius: 0.3em; }
+.row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.22; }
+.row-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-sub { font-size: 0.72em; opacity: 0.62; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.price-main { font-weight: 700; font-variant-numeric: tabular-nums; }
+.price-set { display: flex; gap: 1em; align-items: baseline; }
+.price-pair { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.price-size { font-size: 0.55em; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.diet-chip {
+  display: inline-block; margin-left: 0.5em; padding: 0.05em 0.35em;
+  font-size: 0.55em; font-weight: 700; vertical-align: middle;
+  border: 1px solid rgba(62, 207, 142, 0.6); color: #3ecf8e; border-radius: 0.35em;
+}
+.diet-chip.hot { border-color: transparent; }
+
+.menu-pages { display: flex; gap: 8px; justify-content: center; padding-top: 1vmin; }
+.menu-pages .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(128, 144, 160, 0.35); }
+.menu-pages .dot.on { background: #f5a524; }
+
+/* cards (food) */
+.menu-card {
+  display: flex; flex-direction: column; border-radius: 1em; overflow: hidden;
+  background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.display-root[data-theme='light'] .menu-card { background: #fff; border-color: rgba(0, 0, 0, 0.08); }
+.card-media { flex: 1.4; min-height: 0; background: rgba(128, 144, 160, 0.12); }
+.card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-media-empty { width: 100%; height: 100%; background: linear-gradient(135deg, rgba(245,165,36,0.14), rgba(245,165,36,0.03)); }
+.card-body { flex: 1; padding: 0.7em 0.9em; display: flex; flex-direction: column; gap: 0.25em; min-height: 0; }
+.card-top { display: flex; justify-content: space-between; gap: 0.8em; align-items: baseline; }
+.card-desc { font-size: 0.78em; opacity: 0.65; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.card-diet { margin-top: auto; }
+.card-diet .diet-chip { margin-left: 0; margin-right: 0.5em; }
+
+/* ---------- image / ads ---------- */
+.image-slot { width: 100%; height: 100%; border-radius: 12px; background-position: center; }
+.image-slot.cover { background-size: cover; }
+.image-slot.contain { background-size: contain; background-repeat: no-repeat; }
+
+.ads-slot { position: relative; width: 100%; height: 100%; border-radius: 12px; overflow: hidden; }
+.ads-frame {
+  position: absolute; inset: 0; opacity: 0; transition: opacity 0.9s ease;
+  background-position: center; background-repeat: no-repeat;
+}
+.ads-frame.cover { background-size: cover; }
+.ads-frame.contain { background-size: contain; }
+.ads-frame.on { opacity: 1; }
+
+/* ---------- text / featured / logo / ticker / clock ---------- */
+.text-slot { height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 1.2vmin; }
+.text-slot.align-center { align-items: center; text-align: center; }
+.text-slot .text-title { font-weight: 800; line-height: 1.08; }
+.text-slot.size-md .text-title { font-size: 3.4vmin; }
+.text-slot.size-lg .text-title { font-size: 5.4vmin; }
+.text-slot.size-xl .text-title { font-size: 8.5vmin; }
+.text-slot .text-body { font-size: 2.4vmin; opacity: 0.72; max-width: 62ch; white-space: pre-wrap; }
+
+.featured-slot { height: 100%; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: rgba(255, 255, 255, 0.045); }
+.featured-media { flex: 1.5; background-size: cover; background-position: center; }
+.featured-body { padding: 2.2vmin; display: flex; flex-direction: column; gap: 0.7vmin; }
+.featured-tagline { color: #f5a524; text-transform: uppercase; letter-spacing: 0.16em; font-weight: 700; font-size: 1.6vmin; }
+.featured-name { font-size: 3.6vmin; font-weight: 800; line-height: 1.1; }
+.featured-sub { font-size: 1.9vmin; opacity: 0.65; }
+.featured-desc { font-size: 1.8vmin; opacity: 0.75; }
+.featured-price { font-size: 3vmin; font-weight: 800; color: #f5a524; margin-top: 0.5vmin; }
+
+.logo-slot { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 6vmin; font-weight: 800; letter-spacing: 0.02em; }
+.logo-slot img { max-width: 70%; max-height: 80%; object-fit: contain; }
+
+.ticker-slot { height: 100%; display: flex; align-items: center; overflow: hidden; }
+.ticker-track { display: flex; gap: 6vw; white-space: nowrap; font-size: 2.4vmin; font-weight: 600; animation: ticker 18s linear infinite; }
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+.clock-slot { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 4vmin; font-weight: 600; font-variant-numeric: tabular-nums; opacity: 0.8; }
