@@ -95,11 +95,13 @@
 .card-diet .diet-chip { margin-left: 0; margin-right: 0.5em; }
 
 /* ---------- image / ads ---------- */
-.image-slot { width: 100%; height: 100%; border-radius: 12px; background-position: center; }
+/* border-radius is set inline per slot config (roundedCorners/cornerRadius) — see
+   display/slots/misc.tsx#cornerRadiusPx. */
+.image-slot { width: 100%; height: 100%; background-position: center; }
 .image-slot.cover { background-size: cover; }
 .image-slot.contain { background-size: contain; background-repeat: no-repeat; }
 
-.ads-slot { position: relative; width: 100%; height: 100%; border-radius: 12px; overflow: hidden; }
+.ads-slot { position: relative; width: 100%; height: 100%; overflow: hidden; }
 .ads-frame {
   position: absolute; inset: 0; opacity: 0; transition: opacity 0.9s ease;
   background-position: center; background-repeat: no-repeat;

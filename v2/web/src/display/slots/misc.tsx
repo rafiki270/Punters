@@ -2,9 +2,17 @@ import { useEffect, useState } from 'react'
 import { formatMoney } from '@punters/shared'
 import type { AdsSlotConfig, FeedAd, FeedItem, FeedSettings, ImageSlotConfig, SlotConfig, TextSlotConfig } from '@punters/shared'
 
+/** Corner radius is authored at 1080p and scales with the actual viewport, matching
+ * the row-height convention used elsewhere on the display (see MenuSlot). */
+function cornerRadiusPx(config: { roundedCorners: boolean; cornerRadius: number }): string {
+  if (!config.roundedCorners) return '0px'
+  const vScale = window.innerHeight / 1080
+  return `${Math.round(config.cornerRadius * vScale)}px`
+}
+
 export function ImageSlot({ config, urls }: { config: ImageSlotConfig; urls: { md: string; lg: string } | null }) {
   if (!urls) return <div className="slot-empty">Pick an image for this slot</div>
-  return <div className={`image-slot ${config.fit}`} style={{ backgroundImage: `url(${urls.lg})` }} />
+  return <div className={`image-slot ${config.fit}`} style={{ backgroundImage: `url(${urls.lg})`, borderRadius: cornerRadiusPx(config) }} />
 }
 
 export function AdsSlot({ config, ads }: { config: AdsSlotConfig; ads: FeedAd[] }) {
@@ -16,13 +24,14 @@ export function AdsSlot({ config, ads }: { config: AdsSlotConfig; ads: FeedAd[] 
   }, [ads.length, config.intervalSec])
 
   if (ads.length === 0) return <div className="slot-empty">Upload media to rotate here</div>
+  const radius = cornerRadiusPx(config)
   return (
-    <div className="ads-slot">
+    <div className="ads-slot" style={{ borderRadius: radius }}>
       {ads.map((ad, i) => (
         <div
           key={ad.assetId}
           className={`ads-frame ${config.fit}${i === index % ads.length ? ' on' : ''}`}
-          style={{ backgroundImage: `url(${ad.urls.lg})` }}
+          style={{ backgroundImage: `url(${ad.urls.lg})`, borderRadius: radius }}
         />
       ))}
     </div>

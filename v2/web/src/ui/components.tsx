@@ -167,3 +167,35 @@ export function NumberBox({
     />
   )
 }
+
+/** Compact labeled slider — live value shown inline, commits on every drag tick. */
+export function Slider({
+  value,
+  min,
+  max,
+  step = 1,
+  unit = '',
+  onChange,
+}: {
+  value: number
+  min: number
+  max: number
+  step?: number
+  unit?: string
+  onChange: (v: number) => void
+}) {
+  return (
+    <div className="slider-row">
+      <input
+        type="range"
+        className="slider"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+      <span className="slider-value">{value}{unit}</span>
+    </div>
+  )
+}

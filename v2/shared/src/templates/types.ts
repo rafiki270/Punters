@@ -65,6 +65,10 @@ export interface MenuSlotConfig {
 export interface ImageSlotConfig {
   assetId?: number
   fit: 'cover' | 'contain'
+  /** When false, corners are square regardless of cornerRadius. */
+  roundedCorners: boolean
+  /** Corner radius in px at 1080p; only applied when roundedCorners is true. */
+  cornerRadius: number
 }
 
 export interface AdsSlotConfig {
@@ -72,6 +76,10 @@ export interface AdsSlotConfig {
   tag?: string
   intervalSec: number
   fit: 'cover' | 'contain'
+  /** When false, corners are square regardless of cornerRadius. */
+  roundedCorners: boolean
+  /** Corner radius in px at 1080p; only applied when roundedCorners is true. */
+  cornerRadius: number
 }
 
 export interface TextSlotConfig {
@@ -106,8 +114,9 @@ export const MENU_DEFAULTS: MenuSlotConfig = {
   groupByCategory: false,
 }
 
-export const ADS_DEFAULTS: AdsSlotConfig = { intervalSec: 8, fit: 'cover' }
-export const IMAGE_DEFAULTS: ImageSlotConfig = { fit: 'cover' }
+// 12px matches the template gallery's original hardcoded radius, kept as the default look.
+export const ADS_DEFAULTS: AdsSlotConfig = { intervalSec: 8, fit: 'cover', roundedCorners: true, cornerRadius: 12 }
+export const IMAGE_DEFAULTS: ImageSlotConfig = { fit: 'cover', roundedCorners: true, cornerRadius: 12 }
 export const TEXT_DEFAULTS: TextSlotConfig = { align: 'center', size: 'lg' }
 
 export function menuConfig(slot: TemplateSlot, pageConfig: Record<string, SlotConfig> | undefined): MenuSlotConfig {

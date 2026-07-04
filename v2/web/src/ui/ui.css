@@ -68,6 +68,24 @@ textarea.input { height: auto; padding: 6px 8px; resize: vertical; }
 .input.w-xs { width: 56px; flex: none; }
 .input.w-sm { width: 84px; flex: none; }
 
+/* ---------- slider ---------- */
+.slider-row { display: flex; align-items: center; gap: 8px; height: var(--ctl-h); }
+.slider {
+  flex: 1; min-width: 90px; height: var(--ctl-h); margin: 0;
+  -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer;
+}
+.slider::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--border-strong); }
+.slider::-moz-range-track { height: 4px; border-radius: 2px; background: var(--border-strong); }
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); margin-top: -5px; border: none;
+}
+.slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: none; }
+.slider-value {
+  flex: none; min-width: 34px; text-align: right; font-size: var(--fs-sm); color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- form layout ---------- */
 .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .field > label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }

@@ -11,7 +11,7 @@ import {
 } from '@punters/shared'
 import { api } from '../../api'
 import type { AdminItem, AdminPage, AdminZone } from '../../types'
-import { Field, Modal, NumberBox, Typeahead, useToast } from '../../ui/components'
+import { Field, Modal, NumberBox, Slider, Typeahead, useToast } from '../../ui/components'
 import { AssetPicker } from '../AssetPicker'
 
 /** Playlist per zone: pick templates from the gallery, tune each slot, reorder. */
@@ -238,6 +238,25 @@ function PageConfigEditor({
   )
 }
 
+/** Shared by the image and ads slot editors: a toggle, and a radius slider that only
+ * appears once rounding is on. */
+function RoundedCornersField({ config, onPatch }: { config: SlotConfig; onPatch: (p: SlotConfig) => void }) {
+  const rounded = config.roundedCorners ?? true
+  return (
+    <div className="form-row">
+      <label className="check">
+        <input type="checkbox" checked={rounded} onChange={(e) => onPatch({ roundedCorners: e.target.checked })} />
+        Rounded corners
+      </label>
+      {rounded && (
+        <Field label="Corner radius" grow>
+          <Slider value={config.cornerRadius ?? 12} min={0} max={80} unit="px" onChange={(v) => onPatch({ cornerRadius: v })} />
+        </Field>
+      )}
+    </div>
+  )
+}
+
 function SlotEditor({ slot, config, onPatch }: { slot: TemplateSlot; config: SlotConfig; onPatch: (p: SlotConfig) => void }) {
   const [picking, setPicking] = useState(false)
 
@@ -314,29 +333,35 @@ function SlotEditor({ slot, config, onPatch }: { slot: TemplateSlot; config: Slo
       }
       case 'image':
         return (
-          <div className="form-row">
-            <button className="btn sm" onClick={() => setPicking(true)}>{config.assetId ? `Image #${config.assetId} · change` : 'Choose image…'}</button>
-            <Field label="Fit">
-              <select className="select" style={{ width: 100 }} value={config.fit ?? 'cover'} onChange={(e) => onPatch({ fit: e.target.value as 'cover' | 'contain' })}>
-                <option value="cover">Fill</option>
-                <option value="contain">Fit</option>
-              </select>
-            </Field>
+          <>
+            <div className="form-row">
+              <button className="btn sm" onClick={() => setPicking(true)}>{config.assetId ? `Image #${config.assetId} · change` : 'Choose image…'}</button>
+              <Field label="Fit">
+                <select className="select" style={{ width: 100 }} value={config.fit ?? 'cover'} onChange={(e) => onPatch({ fit: e.target.value as 'cover' | 'contain' })}>
+                  <option value="cover">Fill</option>
+                  <option value="contain">Fit</option>
+                </select>
+              </Field>
+            </div>
+            <RoundedCornersField config={config} onPatch={onPatch} />
             {picking && <AssetPicker purpose="media" onPick={(id) => { onPatch({ assetId: id }); setPicking(false) }} onClose={() => setPicking(false)} />}
-          </div>
+          </>
         )
       case 'ads':
         return (
-          <div className="form-row">
-            <Field label="Only media tagged"><input className="input" style={{ width: 140 }} placeholder="(all media)" value={config.tag ?? ''} onChange={(e) => onPatch({ tag: e.target.value || undefined })} /></Field>
-            <Field label="Seconds per image"><NumberBox value={config.intervalSec ?? 8} min={3} max={120} onCommit={(v) => onPatch({ intervalSec: v })} /></Field>
-            <Field label="Fit">
-              <select className="select" style={{ width: 100 }} value={config.fit ?? 'cover'} onChange={(e) => onPatch({ fit: e.target.value as 'cover' | 'contain' })}>
-                <option value="cover">Fill</option>
-                <option value="contain">Fit</option>
-              </select>
-            </Field>
-          </div>
+          <>
+            <div className="form-row">
+              <Field label="Only media tagged"><input className="input" style={{ width: 140 }} placeholder="(all media)" value={config.tag ?? ''} onChange={(e) => onPatch({ tag: e.target.value || undefined })} /></Field>
+              <Field label="Seconds per image"><NumberBox value={config.intervalSec ?? 8} min={3} max={120} onCommit={(v) => onPatch({ intervalSec: v })} /></Field>
+              <Field label="Fit">
+                <select className="select" style={{ width: 100 }} value={config.fit ?? 'cover'} onChange={(e) => onPatch({ fit: e.target.value as 'cover' | 'contain' })}>
+                  <option value="cover">Fill</option>
+                  <option value="contain">Fit</option>
+                </select>
+              </Field>
+            </div>
+            <RoundedCornersField config={config} onPatch={onPatch} />
+          </>
         )
       case 'text':
         return (
