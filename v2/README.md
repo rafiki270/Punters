@@ -8,6 +8,7 @@ taprooms, breweries, and restaurants. See `ARCHITECTURE.md` for the full design.
 ```bash
 cd v2
 npm install
+cp server/.env.example server/.env   # local SQLite path (no secrets)
 npm run db:push      # create the SQLite database
 npm run db:seed      # defaults + demo catalog, taps, and a sample zone
 npm run start        # server on http://localhost:4000
