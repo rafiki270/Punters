@@ -196,6 +196,7 @@ Pricing supports volumes; see 4.2.2 for volume display rules.
 - Desktop/Server
   - Docker Compose for a one-command install (server + static assets). Alternative: system install script for Node + service.
   - Development convenience: `make launch` performs Prisma generate/migrate/seed and starts web (5173) and API (3000) together.
+  - Optional demo data: `make db-seed-demo` (or `SEED_DEMO=1 npm run db:seed`) seeds sample beers with prices and assigns taps 1-4; skipped automatically when beers already exist.
 - Networking
   - Local hostname (mDNS): e.g., `http://punters.local`.
   - QR code onboarding for client devices; short pairing code fallback.

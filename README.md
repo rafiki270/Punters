@@ -76,6 +76,14 @@ make install
 make launch80
 ```
 
+Want a populated board while developing? Seed sample beers and tap assignments with:
+
+```bash
+make db-seed-demo
+```
+
+(Equivalent to `SEED_DEMO=1 npm run db:seed`; it only adds demo beers when the database has none, so it won't touch real data.)
+
 ### One-click updates
 Need the latest fixes? Open the Admin overlay, head to the System tab, and press **Check for updates**. Punters fetches the newest code and runs `git pull --ff-only` in the background, so you can keep serving beers while it updates.
 

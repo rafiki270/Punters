@@ -34,7 +34,7 @@ This file mirrors the working plan so we can track progress in Git. Check items 
 ## Data and Seeding
 - [x] Default sizes seeded (Pint, Half, 2/3, 1/3)
 - [x] Global default prices for guest beers (e.g., Pint £6, Half £3)
-- [ ] Optional dev seed: sample beers and tap assignments for demo
+- [x] Optional dev seed: sample beers and tap assignments for demo (`make db-seed-demo` or `SEED_DEMO=1 npm run db:seed`)
 
 ## Packaging & Deployment
 - [x] Dockerfile and docker-compose for one-command install

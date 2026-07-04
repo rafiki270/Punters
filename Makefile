@@ -2,7 +2,7 @@ SHELL := /bin/bash
 HOST_PORT ?= 80
 
 .PHONY: help install dev dev-web build start \
-  kioskpi prisma-generate prisma-migrate db-seed \
+  kioskpi prisma-generate prisma-migrate db-seed db-seed-demo \
   docker-build docker-up docker-down docker-logs \
   launch launch80 launch-client update \
   pi-setup pi-launch pi-launch-client \
@@ -29,6 +29,9 @@ prisma-migrate: ## Run Prisma migrations (dev)
 
 db-seed: ## Seed defaults (sizes, settings)
 	npm run db:seed
+
+db-seed-demo: ## Seed defaults plus demo beers and tap assignments
+	SEED_DEMO=1 npm run db:seed
 
 dev: ## Run server in dev mode on port 3000
 	npm run dev

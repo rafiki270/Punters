@@ -76,6 +76,12 @@ async function main() {
     } as any)
   }
 
+  // Optional demo data: sample beers and tap assignments (SEED_DEMO=1)
+  const seedDemo = ['1', 'true', 'yes'].includes((process.env.SEED_DEMO ?? '').toLowerCase())
+  if (seedDemo) {
+    await seedDemoData(allSizes)
+  }
+
   const cocktailCount = await prisma.cocktail.count()
   if (cocktailCount === 0) {
     await prisma.cocktail.createMany({
@@ -97,6 +103,59 @@ async function main() {
       ],
     })
   }
+}
+
+async function seedDemoData(allSizes: { id: number; name: string }[]) {
+  const beerCount = await prisma.beer.count()
+  if (beerCount > 0) {
+    console.log('SEED_DEMO: beers already exist, skipping demo seed')
+    return
+  }
+
+  const pint = allSizes.find((s) => s.name === 'Pint')
+  const half = allSizes.find((s) => s.name === 'Half Pint')
+
+  const demoBeers = [
+    { name: 'Galaxy Haze', brewery: 'Punters Brewing Co.', style: 'Hazy IPA', abv: 6.2, colorHex: '#F5A623', pintMinor: 650, halfMinor: 340 },
+    { name: 'Session Pale', brewery: 'Punters Brewing Co.', style: 'Pale Ale', abv: 4.1, colorHex: '#E8C547', pintMinor: 550, halfMinor: 290 },
+    { name: 'Midnight Stout', brewery: 'Old Town Brewery', style: 'Dry Stout', abv: 4.8, colorHex: '#2B1B12', pintMinor: 580, halfMinor: 300 },
+    { name: 'Crisp Lager', brewery: 'Old Town Brewery', style: 'Helles Lager', abv: 4.6, colorHex: '#F7E27B', pintMinor: 520, halfMinor: 280 },
+    { name: 'Berry Sour', brewery: 'Wildflower Ales', style: 'Fruited Sour', abv: 3.9, colorHex: '#C0392B', isGuest: true, pintMinor: 620, halfMinor: 320 },
+    { name: 'West Coast IPA', brewery: 'Wildflower Ales', style: 'IPA', abv: 6.8, colorHex: '#D98E32', isGuest: true, pintMinor: 680, halfMinor: 350 },
+  ]
+
+  const createdIds: number[] = []
+  for (const b of demoBeers) {
+    const { pintMinor, halfMinor, ...beerData } = b
+    const beer = await prisma.beer.create({
+      data: { ...beerData, isGuest: !!(b as any).isGuest, active: true },
+    })
+    createdIds.push(beer.id)
+    const prices = [
+      pint ? { serveSizeId: pint.id, amountMinor: pintMinor } : null,
+      half ? { serveSizeId: half.id, amountMinor: halfMinor } : null,
+    ].filter((p): p is { serveSizeId: number; amountMinor: number } => p != null)
+    for (const p of prices) {
+      await prisma.price.create({
+        data: { beerId: beer.id, serveSizeId: p.serveSizeId, amountMinor: p.amountMinor, currency: 'GBP' },
+      })
+    }
+  }
+
+  // Assign the first four demo beers to taps 1-4, leaving the rest on the shelf
+  const tapCount = Math.min(4, createdIds.length)
+  for (let i = 0; i < tapCount; i++) {
+    const number = i + 1
+    const beerId = createdIds[i]
+    await prisma.tap.upsert({
+      where: { number },
+      update: { beerId, status: 'on' },
+      create: { number, beerId, status: 'on' },
+    })
+    await prisma.tapAssignment.create({ data: { tapNumber: number, beerId } })
+  }
+
+  console.log(`SEED_DEMO: created ${createdIds.length} beers and assigned taps 1-${tapCount}`)
 }
 
 main()
