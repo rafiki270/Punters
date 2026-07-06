@@ -53,6 +53,19 @@ async function json(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payl
   return { status: res.statusCode, body: res.json() }
 }
 
+/** Builds a real multipart/form-data body (via the platform FormData/Request) so
+ * @fastify/multipart parses it exactly as it would a browser upload. */
+async function uploadFile(fileBuffer: Buffer, filename: string, mime: string, purpose = 'media') {
+  const form = new FormData()
+  form.append('purpose', purpose)
+  form.append('file', new Blob([new Uint8Array(fileBuffer)], { type: mime }), filename)
+  const req = new Request('http://test/api/media', { method: 'POST', body: form })
+  const payload = Buffer.from(await req.arrayBuffer())
+  const headers = { ...Object.fromEntries(req.headers), cookie: sessionCookie }
+  const res = await app.inject({ method: 'POST', url: '/api/media', payload, headers })
+  return { status: res.statusCode, body: res.json() }
+}
+
 test('settings bootstrap and update', async () => {
   const get = await json('GET', '/api/settings')
   assert.equal(get.status, 200)
@@ -152,6 +165,57 @@ test('screen pairing and display feed', async () => {
   // Same key hellos back to the same screen.
   const again = await json('POST', '/api/screens/hello', { key: screen.key })
   assert.equal(again.body.screen.id, screen.id)
+})
+
+test('video upload: mediaType, orig variant, ads feed content — image uploads unaffected', async () => {
+  // ffmpeg/ffprobe are not installed in this container, so this also exercises the
+  // "probing unavailable" path: the upload must still succeed with no poster/duration.
+  const videoBytes = Buffer.from('not-a-real-mp4-but-bytes-are-what-we-verify-round-trip'.repeat(20))
+  const uploaded = await uploadFile(videoBytes, 'promo.mp4', 'video/mp4')
+  assert.equal(uploaded.status, 200)
+  const asset = uploaded.body.asset
+  assert.equal(asset.mediaType, 'video')
+  assert.equal(asset.durationSec, null)
+  assert.ok(asset.videoUrl, 'expected an orig variant URL')
+
+  // The orig variant serves the exact bytes back.
+  const served = await app.inject({ method: 'GET', url: asset.videoUrl })
+  assert.equal(served.statusCode, 200)
+  assert.ok(Buffer.from(served.rawPayload).equals(videoBytes))
+
+  // The asset list also reports mediaType/durationSec.
+  const list = await json('GET', '/api/media?purpose=media')
+  const listed = list.body.assets.find((a: { id: number }) => a.id === asset.id)
+  assert.equal(listed.mediaType, 'video')
+  assert.equal(listed.durationSec, null)
+
+  // The display feed's ads content carries mediaType 'video' + videoUrl.
+  const zone = (await json('POST', '/api/zones', { name: 'Promo wall' })).body.zone
+  await json('POST', `/api/zones/${zone.id}/pages`, { templateId: 'ad-full' })
+  const hello = await json('POST', '/api/screens/hello', {})
+  await json('PUT', `/api/screens/${hello.body.screen.id}`, { zoneId: zone.id })
+  const feed = await json('GET', `/api/display/feed?key=${hello.body.screen.key}`)
+  const ads = feed.body.pages[0].content.ads.ads
+  const feedAd = ads.find((a: { assetId: number }) => a.assetId === asset.id)
+  assert.ok(feedAd, 'expected the uploaded video to appear in the ads feed')
+  assert.equal(feedAd.mediaType, 'video')
+  assert.equal(feedAd.videoUrl, asset.videoUrl)
+  assert.equal(feedAd.durationSec, null)
+
+  // Image uploads still behave exactly as before: WebP renditions + mediaType 'image'.
+  const png1x1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  )
+  const imageUploaded = await uploadFile(png1x1, 'pixel.png', 'image/png')
+  assert.equal(imageUploaded.status, 200)
+  const imageAsset = imageUploaded.body.asset
+  assert.equal(imageAsset.mediaType, 'image')
+  assert.equal(imageAsset.durationSec, null)
+  assert.equal(imageAsset.videoUrl, null)
+  assert.ok(imageAsset.urls.thumb.endsWith('.webp'))
+  assert.equal(imageAsset.width, 1)
+  assert.equal(imageAsset.height, 1)
 })
 
 test('menu slot config overrides resolve in the feed', async () => {

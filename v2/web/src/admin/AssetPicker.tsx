@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, uploadMedia } from '../api'
 import type { AdminAsset } from '../types'
 import { Modal } from '../ui/components'
+import { mmss } from './panels/MediaPanel'
 
 /** Pick an existing optimized asset or upload a new one in place. */
 export function AssetPicker({
@@ -44,12 +45,18 @@ export function AssetPicker({
 
   return (
     <Modal
-      title="Choose image"
+      title="Choose media"
       onClose={onClose}
       size="lg"
       actions={
         <>
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => onFiles(e.target.files)} />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+            hidden
+            onChange={(e) => onFiles(e.target.files)}
+          />
           <button className="btn primary sm" disabled={busy} onClick={() => fileRef.current?.click()}>
             {busy ? 'Optimizing…' : 'Upload new'}
           </button>
@@ -60,14 +67,22 @@ export function AssetPicker({
       <div className="media-grid">
         {assets.map((a) => (
           <div key={a.id} className="media-card selectable" onClick={() => onPick(a.id)}>
-            <img src={a.urls.thumb} alt={a.originalName} loading="lazy" />
+            {a.mediaType === 'video' && !a.urls.thumb ? (
+              <div className="media-video-placeholder" aria-hidden>▶</div>
+            ) : (
+              <img src={a.urls.thumb} alt={a.originalName} loading="lazy" />
+            )}
             <div className="media-meta">
               <span className="media-name">{a.originalName}</span>
-              <span className="faint">{a.width}×{a.height}</span>
+              <span className="faint">
+                {a.mediaType === 'video'
+                  ? `video${a.durationSec != null ? ` · ${mmss(a.durationSec)}` : ''}`
+                  : `${a.width}×${a.height}`}
+              </span>
             </div>
           </div>
         ))}
-        {assets.length === 0 && <div className="faint">No images yet — upload one.</div>}
+        {assets.length === 0 && <div className="faint">No media yet — upload one.</div>}
       </div>
     </Modal>
   )

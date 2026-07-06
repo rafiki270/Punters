@@ -7,6 +7,11 @@ function kb(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`
 }
 
+export function mmss(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
 /** Media library: every upload is optimized to WebP renditions on the server. */
 export function MediaPanel() {
   const [assets, setAssets] = useState<AdminAsset[]>([])
@@ -31,7 +36,7 @@ export function MediaPanel() {
         await uploadMedia(file, 'media')
       }
       await load()
-      show(`Uploaded and optimized ${files.length} image${files.length > 1 ? 's' : ''}`)
+      show(`Uploaded ${files.length} file${files.length > 1 ? 's' : ''}`)
     } catch (e) {
       show((e as Error).message, true)
     } finally {
@@ -53,23 +58,41 @@ export function MediaPanel() {
         Media
         <span className="faint">promos & artwork rotate on displays; item photos live here too</span>
         <span className="spacer" />
-        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+          multiple
+          hidden
+          onChange={(e) => onFiles(e.target.files)}
+        />
         <button className="btn primary" disabled={busy} onClick={() => fileRef.current?.click()}>
-          {busy ? 'Optimizing…' : 'Upload images'}
+          {busy ? 'Optimizing…' : 'Upload media'}
         </button>
       </div>
 
       <div className="media-grid">
         {assets.map((a) => (
           <div key={a.id} className="media-card">
-            <img src={a.urls.thumb} alt={a.originalName} loading="lazy" />
+            {a.mediaType === 'video' ? (
+              a.urls.thumb ? (
+                <img src={a.urls.thumb} alt={a.originalName} loading="lazy" />
+              ) : (
+                <div className="media-video-placeholder" aria-hidden>▶</div>
+              )
+            ) : (
+              <img src={a.urls.thumb} alt={a.originalName} loading="lazy" />
+            )}
             <div className="media-meta">
               <span className="media-name" title={a.originalName}>{a.originalName}</span>
               <span className="faint">
-                {a.width}×{a.height} · {kb(a.sizeBytes)} → {kb(a.optimizedBytes)}
+                {a.mediaType === 'video'
+                  ? `${kb(a.sizeBytes)}${a.durationSec != null ? ` · ${mmss(a.durationSec)}` : ''}`
+                  : `${a.width}×${a.height} · ${kb(a.sizeBytes)} → ${kb(a.optimizedBytes)}`}
               </span>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <span className="chip">{a.purpose}</span>
+                {a.mediaType === 'video' && <span className="chip">video</span>}
                 <span className="spacer" />
                 <button
                   className="btn ghost sm"
@@ -89,7 +112,7 @@ export function MediaPanel() {
             </div>
           </div>
         ))}
-        {assets.length === 0 && <div className="faint">Drop images anywhere on this page, or use Upload.</div>}
+        {assets.length === 0 && <div className="faint">Drop images or videos anywhere on this page, or use Upload.</div>}
       </div>
       {toast}
     </div>

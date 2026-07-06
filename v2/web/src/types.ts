@@ -62,10 +62,14 @@ export interface AdminAsset {
   tag: string | null
   originalName: string
   mime: string
+  mediaType: 'image' | 'video'
   width: number | null
   height: number | null
   sizeBytes: number
+  durationSec: number | null
   urls: AssetUrls
+  /** Only set for video assets — the /media/... URL of the stored original file. */
+  videoUrl: string | null
   optimizedBytes: number
 }
 

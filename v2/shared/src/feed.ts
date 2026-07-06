@@ -43,6 +43,11 @@ export interface FeedAd {
   urls: AssetUrls
   width: number | null
   height: number | null
+  mediaType: 'image' | 'video'
+  /** /media/... URL of the stored original file; only set when mediaType is 'video'. */
+  videoUrl: string | null
+  /** Known video duration, when ffprobe was available at upload time. */
+  durationSec: number | null
 }
 
 export interface FeedSlotContent {
@@ -52,8 +57,13 @@ export interface FeedSlotContent {
   featured?: FeedItem | null
   /** For ads slots. */
   ads?: FeedAd[]
-  /** For image slots. */
+  /** For image slots: poster/image URLs, or null if a video asset has no poster. */
   imageUrls?: AssetUrls | null
+  /** For image slots: whether the configured asset is a video. */
+  mediaType?: 'image' | 'video'
+  /** For image slots holding a video asset. */
+  videoUrl?: string | null
+  durationSec?: number | null
 }
 
 export interface FeedPage {

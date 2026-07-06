@@ -13,7 +13,7 @@ import {
 } from '@punters/shared'
 import { prisma } from '../../core/prisma'
 import { getSettings } from '../settings/routes'
-import { assetUrlsById, toAssetWithUrls } from '../media/service'
+import { assetUrlsById, assetMediaById, toAssetWithUrls } from '../media/service'
 import { httpError } from '../../core/errors'
 
 type ItemRow = Awaited<ReturnType<typeof loadItems>>[number]
@@ -102,7 +102,15 @@ async function resolveAds(config: SlotConfig): Promise<FeedSlotContent> {
   return {
     ads: assets.map((a) => {
       const withUrls = toAssetWithUrls(a)
-      return { assetId: a.id, urls: withUrls.urls, width: a.width, height: a.height }
+      return {
+        assetId: a.id,
+        urls: withUrls.urls,
+        width: a.width,
+        height: a.height,
+        mediaType: withUrls.mediaType,
+        videoUrl: withUrls.videoUrl,
+        durationSec: withUrls.durationSec,
+      }
     }),
   }
 }
@@ -137,7 +145,13 @@ async function resolvePage(page: {
         break
       }
       case 'image': {
-        content[slot.id] = { imageUrls: await assetUrlsById(slotConfig.assetId) }
+        const media = await assetMediaById(slotConfig.assetId)
+        content[slot.id] = {
+          imageUrls: media?.imageUrls ?? null,
+          mediaType: media?.mediaType ?? 'image',
+          videoUrl: media?.videoUrl ?? null,
+          durationSec: media?.durationSec ?? null,
+        }
         break
       }
       case 'featured': {

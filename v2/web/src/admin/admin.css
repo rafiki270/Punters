@@ -52,6 +52,10 @@
 .media-card img { width: 100%; aspect-ratio: 16/10; object-fit: cover; display: block; }
 .media-card .media-meta { padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
 .media-card .media-name { font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.media-video-placeholder {
+  width: 100%; aspect-ratio: 16/10; display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; color: var(--text-faint); background: color-mix(in srgb, #5a8ee0 22%, var(--bg-inset));
+}
 
 /* pages playlist */
 .page-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }

@@ -16,7 +16,7 @@ export async function mediaRoutes(app: FastifyInstance) {
   })
 
   app.post('/api/media', async (req) => {
-    const file = await req.file({ limits: { fileSize: 40 * 1024 * 1024 } })
+    const file = await req.file({ limits: { fileSize: 200 * 1024 * 1024 } })
     if (!file) throw httpError(400, 'No file uploaded')
     const buffer = await file.toBuffer()
     const fields = file.fields as Record<string, { value?: string } | undefined>

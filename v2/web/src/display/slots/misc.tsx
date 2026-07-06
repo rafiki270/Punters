@@ -10,30 +10,83 @@ function cornerRadiusPx(config: { roundedCorners: boolean; cornerRadius: number 
   return `${Math.round(config.cornerRadius * vScale)}px`
 }
 
-export function ImageSlot({ config, urls }: { config: ImageSlotConfig; urls: { md: string; lg: string } | null }) {
-  if (!urls) return <div className="slot-empty">Pick an image for this slot</div>
-  return <div className={`image-slot ${config.fit}`} style={{ backgroundImage: `url(${urls.lg})`, borderRadius: cornerRadiusPx(config) }} />
+export interface ImageSlotContent {
+  imageUrls: { md: string; lg: string } | null
+  mediaType?: 'image' | 'video'
+  videoUrl?: string | null
+}
+
+export function ImageSlot({ config, content }: { config: ImageSlotConfig; content: ImageSlotContent }) {
+  const { imageUrls, mediaType, videoUrl } = content
+  const radius = cornerRadiusPx(config)
+  if (mediaType === 'video' && videoUrl) {
+    return (
+      <video
+        className={`image-slot ${config.fit}`}
+        style={{ borderRadius: radius }}
+        src={videoUrl}
+        poster={imageUrls?.lg || undefined}
+        autoPlay
+        muted
+        loop
+        playsInline
+      />
+    )
+  }
+  if (!imageUrls) return <div className="slot-empty">Pick an image for this slot</div>
+  return <div className={`image-slot ${config.fit}`} style={{ backgroundImage: `url(${imageUrls.lg})`, borderRadius: radius }} />
+}
+
+/** A video ad rotates on its own runtime — advance after min(durationSec, 120)s once known,
+ * rather than the slot's fixed intervalSec (so a 30s promo plays through before cutting away). */
+function adDwellSec(ad: FeedAd, intervalSec: number): number {
+  if (ad.mediaType === 'video' && ad.durationSec != null) return Math.min(ad.durationSec, 120)
+  return intervalSec
 }
 
 export function AdsSlot({ config, ads }: { config: AdsSlotConfig; ads: FeedAd[] }) {
   const [index, setIndex] = useState(0)
+
+  // Per-ad setTimeout chain (rather than one fixed setInterval) so each ad can dwell for
+  // its own duration — a known-length video plays through, everything else uses intervalSec.
   useEffect(() => {
     if (ads.length <= 1) return
-    const t = setInterval(() => setIndex((i) => (i + 1) % ads.length), Math.max(3, config.intervalSec) * 1000)
-    return () => clearInterval(t)
-  }, [ads.length, config.intervalSec])
+    const current = ads[index % ads.length]
+    const seconds = Math.max(3, adDwellSec(current, config.intervalSec))
+    const t = setTimeout(() => setIndex((i) => (i + 1) % ads.length), seconds * 1000)
+    return () => clearTimeout(t)
+  }, [ads, index, config.intervalSec])
 
   if (ads.length === 0) return <div className="slot-empty">Upload media to rotate here</div>
   const radius = cornerRadiusPx(config)
+  const activeIndex = index % ads.length
   return (
     <div className="ads-slot" style={{ borderRadius: radius }}>
-      {ads.map((ad, i) => (
-        <div
-          key={ad.assetId}
-          className={`ads-frame ${config.fit}${i === index % ads.length ? ' on' : ''}`}
-          style={{ backgroundImage: `url(${ad.urls.lg})`, borderRadius: radius }}
-        />
-      ))}
+      {ads.map((ad, i) => {
+        const active = i === activeIndex
+        const poster = ad.urls.lg
+        return (
+          <div
+            key={ad.assetId}
+            className={`ads-frame ${config.fit}${active ? ' on' : ''}`}
+            style={{ backgroundImage: poster ? `url(${poster})` : undefined, borderRadius: radius }}
+          >
+            {/* Only the active frame's video is mounted, so inactive ads never decode in the background. */}
+            {ad.mediaType === 'video' && active && ad.videoUrl && (
+              <video
+                key={ad.assetId}
+                className={`ads-video ${config.fit}`}
+                src={ad.videoUrl}
+                poster={poster || undefined}
+                autoPlay
+                muted
+                loop
+                playsInline
+              />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

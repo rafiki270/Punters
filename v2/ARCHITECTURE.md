@@ -16,7 +16,9 @@ render synchronized, template-driven pages.
    left wall"). Rotation is deterministic — every screen computes the current page from a
    shared epoch + server-synced clock, so screens never drift, even after reconnects.
    A single device with multiple outputs simply runs one browser window per output; each
-   pairs as its own screen.
+   pairs as its own screen. Because localStorage is shared across a device's windows, the
+   second and later windows open as `/?output=2`, `/?output=3`, … so each keeps its own
+   screen identity.
 4. **Every venue type.** A unified `Item` catalog covers beer, cider, wine, spirits,
    cocktails, soft drinks, hot drinks, and food (with categories, dietary flags, spice
    levels, thumbnails). Pricing supports per-size price grids *and* single prices.
@@ -102,10 +104,19 @@ URLs or IDs on a TV.
 
 ## Media pipeline
 
-`POST /api/media` (multipart) → sharp probes the image, then writes WebP renditions
-(thumb/sm/md/lg, capped at source size) plus the original under `data/media/<id>/`.
-The API returns per-variant URLs; menu thumbnails use `thumb`, hero slots use `lg`.
-Deletion is guarded against references from items and settings.
+`POST /api/media` (multipart, up to 200MB) → sharp probes the image, then writes WebP
+renditions (thumb/sm/md/lg, capped at source size) plus the original under
+`data/media/<id>/`. The API returns per-variant URLs; menu thumbnails use `thumb`, hero
+slots use `lg`. Deletion is guarded against references from items and settings.
+
+`video/mp4` and `video/webm` uploads (`Asset.mediaType = 'video'`) skip sharp entirely
+and store the original file as-is under the `orig` variant. If `ffprobe`/`ffmpeg` are on
+PATH, the service best-effort extracts a duration (`Asset.durationSec`) and a poster
+frame — the poster is then run through the same WebP rendition pipeline so videos get
+real thumb/sm/md/lg previews just like images. Neither binary is guaranteed to be
+present, and probing a corrupt upload can fail; either way the upload still succeeds
+with `durationSec: null` and no poster rather than being rejected. Displays render
+video ads/slots as muted, looping `<video>` elements using the `orig` variant's URL.
 
 ## Server modules
 

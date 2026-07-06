@@ -98,8 +98,8 @@
 /* border-radius is set inline per slot config (roundedCorners/cornerRadius) — see
    display/slots/misc.tsx#cornerRadiusPx. */
 .image-slot { width: 100%; height: 100%; background-position: center; }
-.image-slot.cover { background-size: cover; }
-.image-slot.contain { background-size: contain; background-repeat: no-repeat; }
+.image-slot.cover { background-size: cover; object-fit: cover; }
+.image-slot.contain { background-size: contain; background-repeat: no-repeat; object-fit: contain; }
 
 .ads-slot { position: relative; width: 100%; height: 100%; overflow: hidden; }
 .ads-frame {
@@ -109,6 +109,10 @@
 .ads-frame.cover { background-size: cover; }
 .ads-frame.contain { background-size: contain; }
 .ads-frame.on { opacity: 1; }
+/* Video ad frame: fills the same box the poster background-image would. */
+.ads-video { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ads-frame.cover .ads-video { object-fit: cover; }
+.ads-frame.contain .ads-video { object-fit: contain; }
 
 /* ---------- text / featured / logo / ticker / clock ---------- */
 .text-slot { height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 1.2vmin; }

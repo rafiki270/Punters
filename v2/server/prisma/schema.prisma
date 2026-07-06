@@ -171,9 +171,11 @@ model Asset {
   tag          String?
   originalName String
   mime         String
+  mediaType    String         @default("image") // 'image' | 'video'
   width        Int?
   height       Int?
   sizeBytes    Int
+  durationSec  Float? // video duration, when ffprobe was available at upload time
   createdAt    DateTime       @default(now())
   variants     AssetVariant[]
   itemImages   Item[]         @relation("ItemImage")

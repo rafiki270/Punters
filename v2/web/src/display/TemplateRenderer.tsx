@@ -53,7 +53,12 @@ function renderSlot(slot: TemplateSlot, page: FeedPage, settings: FeedSettings, 
         />
       )
     case 'image':
-      return <ImageSlot config={{ ...IMAGE_DEFAULTS, ...config }} urls={content.imageUrls ?? null} />
+      return (
+        <ImageSlot
+          config={{ ...IMAGE_DEFAULTS, ...config }}
+          content={{ imageUrls: content.imageUrls ?? null, mediaType: content.mediaType, videoUrl: content.videoUrl }}
+        />
+      )
     case 'ads':
       return <AdsSlot config={{ ...ADS_DEFAULTS, ...config }} ads={content.ads ?? []} />
     case 'text':
