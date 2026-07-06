@@ -3,7 +3,11 @@ import type { DisplayFeed } from '@punters/shared'
 import { api } from '../api'
 import { onChanged, onTick } from '../socket'
 
-const KEY_STORAGE = 'punters.screenKey'
+// localStorage is shared across every window on the same device+origin, so a fixed key
+// would make a multi-output device's windows all claim to be the SAME screen. Opening
+// the second output as /?output=2 gives each window its own identity.
+const output = new URLSearchParams(window.location.search).get('output')
+const KEY_STORAGE = output ? `punters.screenKey.${output}` : 'punters.screenKey'
 
 /**
  * Register this browser window as a screen (hello), then keep its feed fresh:

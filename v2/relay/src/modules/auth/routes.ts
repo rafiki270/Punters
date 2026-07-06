@@ -16,6 +16,34 @@ const STATE_COOKIE = IS_HTTPS ? '__Host-punters_state' : 'punters_state'
 const PKCE_TTL_MS = 5 * 60_000
 const TICKET_TTL_MS = 60_000
 
+/**
+ * Prisma cannot upsert on a compound unique containing a null member (`teamId: null`
+ * is rejected with a validation error, which used to 500 the login callback for any
+ * user with existing memberships), and SQLite's unique index treats NULLs as distinct
+ * anyway — so idempotency has to live here, as find-then-write.
+ */
+async function upsertMembership(data: {
+  userId: number
+  organisationId: number
+  teamId: number | null
+  orgRole: string
+  teamRole?: string | null
+}) {
+  const existing = await prisma.membership.findFirst({
+    where: { userId: data.userId, organisationId: data.organisationId, teamId: data.teamId },
+  })
+  if (existing) {
+    await prisma.membership.update({
+      where: { id: existing.id },
+      data: { orgRole: data.orgRole, ...(data.teamRole !== undefined ? { teamRole: data.teamRole } : {}) },
+    })
+  } else {
+    await prisma.membership.create({ data })
+  }
+}
+
+// Runs on EVERY login, not just the literal first one — each browser sign-in is a fresh
+// authorization-code grant, and UOA sends firstLogin on all of those. Must be idempotent.
 async function bootstrapMemberships(
   userId: number,
   firstLogin: NonNullable<Awaited<ReturnType<typeof exchangeCode>>['firstLogin']>,
@@ -28,11 +56,7 @@ async function bootstrapMemberships(
       update: {},
       create: { uoaOrgId: org.orgId, name: `Organisation ${org.orgId.slice(-6)}` },
     })
-    await prisma.membership.upsert({
-      where: { userId_organisationId_teamId: { userId, organisationId: organisation.id, teamId: null as unknown as number } },
-      update: { orgRole: org.role },
-      create: { userId, organisationId: organisation.id, teamId: null, orgRole: org.role },
-    })
+    await upsertMembership({ userId, organisationId: organisation.id, teamId: null, orgRole: org.role })
   }
   for (const team of firstLogin.memberships.teams) {
     const organisation = await prisma.organisation.upsert({
@@ -46,17 +70,19 @@ async function bootstrapMemberships(
       create: { uoaTeamId: team.teamId, organisationId: organisation.id, name: `Venue ${team.teamId.slice(-6)}` },
     })
     const orgRole = firstLogin.memberships.orgs.find((o) => o.orgId === team.orgId)?.role ?? 'member'
-    await prisma.membership.upsert({
-      where: { userId_organisationId_teamId: { userId, organisationId: organisation.id, teamId: teamRow.id } },
-      update: { teamRole: team.role },
-      create: { userId, organisationId: organisation.id, teamId: teamRow.id, orgRole, teamRole: team.role },
-    })
+    await upsertMembership({ userId, organisationId: organisation.id, teamId: teamRow.id, orgRole, teamRole: team.role })
   }
 }
 
 export async function authRoutes(app: FastifyInstance) {
   app.get('/login/start', async (req, reply) => {
     const { returnTo } = z.object({ returnTo: z.string().url() }).parse(req.query)
+
+    // Opportunistic housekeeping: both tables only ever grow otherwise (every login
+    // attempt leaves a row; abandoned ones are never revisited).
+    const now = new Date()
+    await prisma.pkceState.deleteMany({ where: { expiresAt: { lt: now } } })
+    await prisma.loginTicket.deleteMany({ where: { OR: [{ expiresAt: { lt: now } }, { redeemed: true }] } })
 
     const codeVerifier = newCodeVerifier()
     const stateId = newOpaqueId()
